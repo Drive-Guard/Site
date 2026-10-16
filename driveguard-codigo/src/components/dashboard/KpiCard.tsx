@@ -1,4 +1,6 @@
-import { LucideIcon } from "lucide-react";
+import { ArrowUpRight, type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { Dica } from "@/components/comum/Dica";
 import { cn } from "@/lib/utils";
 
 interface KpiCardProps {
@@ -6,36 +8,65 @@ interface KpiCardProps {
   value: string | number;
   hint?: string;
   icon: LucideIcon;
-  trend?: number;
+  /** Variação percentual; subir é ruim (vermelho), a não ser com melhorQuandoSobe. */
+  trend?: number | null;
+  trendLabel?: string;
+  melhorQuandoSobe?: boolean;
   variant?: "default" | "risk" | "safe" | "warning";
+  carregando?: boolean;
+  /** Atalho: abre a tela de detalhe já filtrada. */
+  aoClicar?: () => void;
+  /** Para onde o atalho leva (aparece ao passar o mouse e para leitores de tela). */
+  destino?: string;
+  /** Explicação do indicador (ícone "i" ao lado do rótulo). */
+  info?: ReactNode;
 }
 
-export function KpiCard({ label, value, hint, icon: Icon, trend, variant = "default" }: KpiCardProps) {
-  const variants = {
-    default: "from-primary/20 to-primary/5 text-primary",
-    risk: "from-risk-high/30 to-risk-high/5 text-risk-high",
-    safe: "from-risk-low/30 to-risk-low/5 text-risk-low",
-    warning: "from-risk-medium/30 to-risk-medium/5 text-risk-medium",
-  };
+const ICONE: Record<NonNullable<KpiCardProps["variant"]>, string> = {
+  default: "bg-accent text-accent-foreground",
+  risk: "bg-risk-high/12 text-risk-high",
+  safe: "bg-risk-low/12 text-risk-low",
+  warning: "bg-risk-medium/15 text-risk-medium",
+};
 
-  return (
-    <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-primary/40 transition-all">
-      <div className={cn("absolute -top-8 -right-8 w-32 h-32 rounded-full bg-gradient-to-br opacity-60 blur-2xl", variants[variant])} />
-      <div className="relative flex items-start justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</p>
-          {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-          {trend !== undefined && (
-            <p className={cn("mt-2 text-xs font-medium", trend >= 0 ? "text-risk-high" : "text-risk-low")}>
-              {trend >= 0 ? "▲" : "▼"} {Math.abs(trend)}% vs mês anterior
-            </p>
-          )}
+export function KpiCard({ label, value, hint, icon: Icon, trend, trendLabel = "vs período anterior", melhorQuandoSobe, variant = "default", carregando, aoClicar, destino, info }: KpiCardProps) {
+  // Variação abaixo de 1% é estável: nem seta nem cor de alerta.
+  const estavel = trend !== undefined && trend !== null && Math.abs(trend) < 1;
+  const ruim = !estavel && trend !== undefined && trend !== null && (melhorQuandoSobe ? trend < 0 : trend > 0);
+
+  const conteudo = (
+    <div className="relative flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+          {label}
+          {info && <Dica texto={info} />}
+        </p>
+        {carregando ? (
+          <div className="mt-3 h-8 w-24 rounded bg-secondary animate-pulse" />
+        ) : (
+          <p className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-foreground break-words tabular-nums">{value}</p>
+        )}
+        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        {trend !== undefined && trend !== null && (
+          <p className={cn("mt-2 text-xs font-medium", estavel ? "text-muted-foreground" : ruim ? "text-risk-high" : "text-risk-low")}>
+            {estavel ? `= estável ${trendLabel}` : `${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend)}% ${trendLabel}`}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className={cn("p-2 rounded-lg", ICONE[variant])}>
+          <Icon className="h-4 w-4" />
         </div>
-        <div className={cn("p-2.5 rounded-xl bg-gradient-to-br", variants[variant])}>
-          <Icon className="h-5 w-5" />
-        </div>
+        {aoClicar && <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" />}
       </div>
     </div>
+  );
+
+  const classe = "glass-card rounded-xl p-4 sm:p-5 relative overflow-hidden group text-left w-full";
+  if (!aoClicar) return <div className={classe}>{conteudo}</div>;
+  return (
+    <button type="button" onClick={aoClicar} title={destino} aria-label={destino ? `${label}: ${value}. ${destino}` : undefined} className={cn(classe, "clicavel")}>
+      {conteudo}
+    </button>
   );
 }

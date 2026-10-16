@@ -1,70 +1,98 @@
-import { Calendar, MapPin, Truck, User, Download } from "lucide-react";
-
-interface Props {
-  period: string;
-  setPeriod: (v: string) => void;
-  region: string;
-  setRegion: (v: string) => void;
-  vehicle: string;
-  setVehicle: (v: string) => void;
-  onExport: () => void;
-}
+import { useState } from "react";
+import { Calendar, Download, Loader2, MapPin, Truck } from "lucide-react";
+import { toast } from "sonner";
+import { SeletorIntervalo } from "@/components/comum/SeletorIntervalo";
+import { baixarCsv, mensagemDeErro } from "@/lib/api";
+import { type Periodo, ROTULO_PERIODO, useFiltros } from "@/lib/filtros";
+import { diaIso } from "@/lib/formato";
+import { Dica } from "@/components/comum/Dica";
+import { DICAS } from "@/lib/dicas";
 
 const select =
   "bg-secondary/60 border border-border text-sm rounded-lg pl-9 pr-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none";
 
-export function Filters({ period, setPeriod, region, setRegion, vehicle, setVehicle, onExport }: Props) {
+export const REGIOES = ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"];
+export const TIPOS_VEICULO = [
+  { valor: "caminhao", rotulo: "Caminhão" },
+  { valor: "onibus", rotulo: "Ônibus" },
+  { valor: "van", rotulo: "Van" },
+  { valor: "carro_app", rotulo: "Carro App" },
+];
+
+/**
+ * Filtros globais. O período só aparece nas telas que olham para um intervalo
+ * (Visão Gerencial); as telas do "agora" (Monitoramento, Motoristas) usam
+ * janelas próprias em cada quadro e mostram o selo "Tempo real".
+ */
+export function Filters({ ao_vivo = true, exportar = true, periodo = true }: { ao_vivo?: boolean; exportar?: boolean; periodo?: boolean }) {
+  const { filtros, definir, query } = useFiltros();
+  const [baixando, setBaixando] = useState(false);
+
+  async function exportarCsv() {
+    setBaixando(true);
+    try {
+      await baixarCsv("/dashboard/exportar", query, `driveguard-motoristas-${diaIso(new Date())}.csv`);
+    } catch (e) {
+      toast.error(mensagemDeErro(e));
+    } finally {
+      setBaixando(false);
+    }
+  }
+
   return (
-    <div className="glass-card rounded-2xl p-4 flex flex-wrap items-center gap-3">
-      <div className="relative">
-        <Calendar className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select className={select} value={period} onChange={(e) => setPeriod(e.target.value)}>
-          <option>Últimos 7 dias</option>
-          <option>Últimos 30 dias</option>
-          <option>Últimos 90 dias</option>
-          <option>Este ano</option>
-        </select>
-      </div>
+    <div className="glass-card rounded-xl p-4 flex flex-wrap items-center gap-3">
+      {periodo && (
+        <div className="relative">
+          <Calendar className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <select aria-label="Período" className={select} value={filtros.periodo} onChange={(e) => definir({ periodo: e.target.value as Periodo })}>
+            {(Object.keys(ROTULO_PERIODO) as Periodo[]).map((p) => (
+              <option key={p} value={p}>
+                {ROTULO_PERIODO[p]}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {periodo && filtros.periodo === "personalizado" && (
+        <SeletorIntervalo de={filtros.de} ate={filtros.ate} maxDias={400} aoMudar={(de, ate) => definir({ de, ate })} />
+      )}
       <div className="relative">
         <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select className={select} value={region} onChange={(e) => setRegion(e.target.value)}>
-          <option>Todas as regiões</option>
-          <option>Sudeste</option>
-          <option>Sul</option>
-          <option>Nordeste</option>
-          <option>Norte</option>
-          <option>Centro-Oeste</option>
+        <select aria-label="Região" className={select} value={filtros.regiao} onChange={(e) => definir({ regiao: e.target.value })}>
+          <option value="">Todas as regiões</option>
+          {REGIOES.map((r) => (
+            <option key={r}>{r}</option>
+          ))}
         </select>
       </div>
       <div className="relative">
         <Truck className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select className={select} value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-          <option>Todos os veículos</option>
-          <option>Caminhão</option>
-          <option>Ônibus</option>
-          <option>Van</option>
-          <option>Carro App</option>
-        </select>
-      </div>
-      <div className="relative">
-        <User className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select className={select} defaultValue="Todos os motoristas">
-          <option>Todos os motoristas</option>
-          <option>Risco crítico</option>
-          <option>Risco alto</option>
+        <select aria-label="Tipo de veículo" className={select} value={filtros.tipoVeiculo} onChange={(e) => definir({ tipoVeiculo: e.target.value })}>
+          <option value="">Todos os veículos</option>
+          {TIPOS_VEICULO.map((t) => (
+            <option key={t.valor} value={t.valor}>
+              {t.rotulo}
+            </option>
+          ))}
         </select>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <div className="flex items-center gap-2 text-xs text-risk-low font-medium px-3 py-2 rounded-lg bg-risk-low/10 border border-risk-low/30">
-          <span className="h-2 w-2 rounded-full bg-risk-low pulse-dot" />
-          Live • dados em tempo real
-        </div>
-        <button
-          onClick={onExport}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition glow-primary"
-        >
-          <Download className="h-4 w-4" /> Exportar
-        </button>
+        {ao_vivo && (
+          <div className="flex items-center gap-2 text-xs text-risk-low font-medium px-3 py-2 rounded-lg bg-risk-low/10 border border-risk-low/30">
+            <span className="h-2 w-2 rounded-full bg-risk-low pulse-dot" />
+            {periodo ? "Ao vivo • atualiza a cada 30 s" : "Tempo real • atualiza a cada 30 s"}
+            {!periodo && <Dica texto={DICAS.telaAoVivo} />}
+          </div>
+        )}
+        {exportar && (
+          <button
+            onClick={exportarCsv}
+            disabled={baixando}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition glow-primary disabled:opacity-60"
+          >
+            {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Exportar
+          </button>
+        )}
       </div>
     </div>
   );

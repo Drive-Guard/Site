@@ -1,0 +1,5 @@
+{
+  "ambiente": "local",
+  "apiUrl": "http://localhost:3001",
+  "auth": "dev"
+}
