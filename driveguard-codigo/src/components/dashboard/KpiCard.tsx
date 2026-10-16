@@ -21,7 +21,9 @@ export function KpiCard({ label, value, hint, icon: Icon, trend, trendLabel = "v
     safe: "from-risk-low/30 to-risk-low/5 text-risk-low",
     warning: "from-risk-medium/30 to-risk-medium/5 text-risk-medium",
   };
-  const ruim = trend !== undefined && trend !== null && (melhorQuandoSobe ? trend < 0 : trend > 0);
+  // Variação abaixo de 1% é estável: nem seta nem cor de alerta.
+  const estavel = trend !== undefined && trend !== null && Math.abs(trend) < 1;
+  const ruim = !estavel && trend !== undefined && trend !== null && (melhorQuandoSobe ? trend < 0 : trend > 0);
 
   return (
     <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-primary/40 transition-all">
@@ -36,8 +38,8 @@ export function KpiCard({ label, value, hint, icon: Icon, trend, trendLabel = "v
           )}
           {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
           {trend !== undefined && trend !== null && (
-            <p className={cn("mt-2 text-xs font-medium", ruim ? "text-risk-high" : "text-risk-low")}>
-              {trend >= 0 ? "▲" : "▼"} {Math.abs(trend)}% {trendLabel}
+            <p className={cn("mt-2 text-xs font-medium", estavel ? "text-muted-foreground" : ruim ? "text-risk-high" : "text-risk-low")}>
+              {estavel ? `= estável ${trendLabel}` : `${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend)}% ${trendLabel}`}
             </p>
           )}
         </div>

@@ -101,7 +101,7 @@ export default function VisaoGerencial() {
                       <span className={cn("font-semibold", k.periodo.variacaoFadiga <= 0 ? "text-risk-low" : "text-risk-high")}>{Math.abs(k.periodo.variacaoFadiga)}%</span> em relação ao período anterior.{" "}
                     </>
                   )}
-                  {criticos > 0 && `${criticos} recomendações de prioridade alta aguardam ação.`}
+                  {criticos > 0 && (criticos === 1 ? "1 recomendação de prioridade alta aguarda ação." : `${criticos} recomendações de prioridade alta aguardam ação.`)}
                 </>
               )}
             </p>

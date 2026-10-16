@@ -400,10 +400,14 @@ function DialogOcorrencia({ aberto, aoFechar, motorista }: { aberto: boolean; ao
   const [descricao, setDescricao] = useState("");
   const [gravidade, setGravidade] = useState("");
   const [sono, setSono] = useState(false);
+  const cliente = useQueryClient();
   const salvar = useMutation({
     mutationFn: () => api.post(`/motoristas/${motorista.motoristaId}/ocorrencias`, { descricao, gravidade: gravidade || undefined, relacionadoSonolencia: sono }),
     onSuccess: () => {
       toast.success("Ocorrência registrada");
+      // A ocorrência aparece no card do motorista e pode virar insight.
+      cliente.invalidateQueries({ queryKey: ["motorista", motorista.motoristaId] });
+      cliente.invalidateQueries({ queryKey: ["insights-motorista", motorista.motoristaId] });
       setDescricao("");
       setGravidade("");
       setSono(false);
