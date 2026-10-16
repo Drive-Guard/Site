@@ -75,14 +75,15 @@ export function BasePrf() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <ChartCard title="Acidentes por sono por faixa horária" subtitle="Condutor dormindo, por horário do acidente" action={<SeloFonte>PRF</SeloFonte>}>
-          <Conteudo q={faixa} altura={260}>
+          <Conteudo q={faixa} altura={360}>
             {(d) => (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={360}>
                 <BarChart data={d.faixas}>
                   <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
                   <XAxis dataKey="rotulo" stroke={COR.eixo} fontSize={10} interval={0} />
                   <YAxis stroke={COR.eixo} fontSize={12} />
                   <Tooltip
+                    cursor={{ fill: "oklch(0.3 0.025 255 / 0.3)" }}
                     contentStyle={ESTILO_TOOLTIP}
                     formatter={(v: number, nome: string, item) => [`${num(v)} (${item.payload.percentualSono}% dos casos de sono)`, nome === "acidentesSono" ? "Por sono" : nome]}
                   />
@@ -100,12 +101,12 @@ export function BasePrf() {
         <ChartCard title="Principais causas de acidentes" subtitle="Sono destacado entre as causas registradas" action={<SeloFonte>PRF</SeloFonte>}>
           <Conteudo q={causas} altura={260}>
             {(d) => (
-              <ResponsiveContainer width="100%" height={Math.max(260, d.causas.length * 34)}>
+              <ResponsiveContainer width="100%" height={Math.max(360, d.causas.length * 40)}>
                 <BarChart data={d.causas} layout="vertical" margin={{ left: 8, right: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
                   <XAxis type="number" stroke={COR.eixo} fontSize={11} />
                   <YAxis dataKey="causa" type="category" stroke={COR.eixo} fontSize={10} width={150} tickFormatter={(c: string) => (c.length > 26 ? `${c.slice(0, 25)}…` : c)} />
-                  <Tooltip contentStyle={ESTILO_TOOLTIP} formatter={(v: number) => [num(v), "Acidentes"]} />
+                  <Tooltip cursor={{ fill: "oklch(0.3 0.025 255 / 0.3)" }} contentStyle={ESTILO_TOOLTIP} formatter={(v: number) => [num(v), "Acidentes"]} />
                   <Bar dataKey="acidentes" radius={[0, 6, 6, 0]}>
                     {d.causas.map((c) => (
                       <Cell key={c.causa} fill={c.ligadaASono ? COR.risco : c.causa === "Outras causas" ? COR.grade : COR.primaria} />

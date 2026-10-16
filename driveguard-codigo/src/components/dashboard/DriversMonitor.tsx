@@ -271,8 +271,8 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
                     <YAxis stroke={COR.eixo} fontSize={12} domain={[0, 100]} />
                     <Tooltip contentStyle={ESTILO_TOOLTIP} formatter={(v: number, n: string) => [num(v, 1), n === "fadiga" ? "Motorista" : n === "mediaFrota" ? "Média da frota" : "Máximo"]} />
                     <ReferenceLine y={c.limiteAlerta} stroke={COR.risco} strokeDasharray="4 4" label={{ value: "Limite de alerta", fill: COR.risco, fontSize: 11, position: "right" }} />
-                    <Line type="monotone" dataKey="mediaFrota" stroke={COR.eixo} strokeDasharray="5 5" dot={false} connectNulls />
                     <Area type="monotone" dataKey="fadiga" stroke={COR.primaria} strokeWidth={2.5} fill="url(#drvFad)" connectNulls />
+                    <Line type="monotone" dataKey="mediaFrota" stroke="oklch(0.85 0.02 255)" strokeWidth={1.5} strokeDasharray="5 5" dot={false} connectNulls />
                   </AreaChart>
                 </ResponsiveContainer>
               )

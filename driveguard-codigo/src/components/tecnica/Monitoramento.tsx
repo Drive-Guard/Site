@@ -14,12 +14,12 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  ComposedChart,
   Line,
   ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -211,7 +211,7 @@ export default function Monitoramento() {
           <Conteudo q={tempoDirecao} altura={280}>
             {(d) => (
               <ResponsiveContainer width="100%" height={280}>
-                <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                <ComposedChart data={d.filter((p) => p.fadiga !== null)} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
                   <XAxis type="number" dataKey="horas" name="Horas de direção" domain={[0, 12]} ticks={[0, 2, 4, 6, 8, 10, 12]} stroke={COR.eixo} fontSize={12} unit="h" />
                   <YAxis type="number" dataKey="fadiga" name="Score de fadiga" domain={[0, 100]} stroke={COR.eixo} fontSize={12} />
@@ -222,9 +222,9 @@ export default function Monitoramento() {
                     formatter={(valor: number, nome: string) => (nome === "Horas de direção" ? [`${valor}h`, "Meio da faixa"] : nome === "Score de fadiga" ? [`${num(valor, 1)}/100`, nome] : [valor, nome])}
                   />
                   <ReferenceArea y1={70} y2={100} fill={COR.risco} fillOpacity={0.08} stroke={COR.risco} strokeOpacity={0.25} strokeDasharray="3 3" label={{ value: "Zona crítica", fill: COR.risco, fontSize: 11, position: "insideTopRight" }} />
-                  <Line type="monotone" dataKey="fadiga" data={d.filter((p) => p.fadiga !== null)} stroke={COR.primaria} strokeWidth={2.5} dot={false} legendType="none" isAnimationActive={false} />
-                  <Scatter name="Faixa de horas" data={d.filter((p) => p.fadiga !== null)} fill={COR.primaria} />
-                </ScatterChart>
+                  <Line type="monotone" dataKey="fadiga" stroke={COR.primaria} strokeWidth={2.5} dot={false} legendType="none" isAnimationActive={false} />
+                  <Scatter name="Faixa de horas" dataKey="fadiga" fill={COR.primaria} />
+                </ComposedChart>
               </ResponsiveContainer>
             )}
           </Conteudo>
