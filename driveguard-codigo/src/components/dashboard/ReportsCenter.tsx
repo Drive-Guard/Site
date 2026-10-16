@@ -257,7 +257,7 @@ export default function ReportsCenter() {
             <div>
               <h2 className="text-base font-semibold tracking-tight">Resumo inteligente</h2>
               <p className="text-xs text-muted-foreground">
-                {r?.resumoInteligente.origem === "ia" ? "Gerado pela IA a partir dos últimos 7 dias" : "Gerado automaticamente com base nos filtros aplicados"}
+                {r?.resumoInteligente.origem === "ia" ? "Gerado pela IA para o período dos filtros" : "Gerado automaticamente com base nos filtros aplicados"}
               </p>
             </div>
           </div>
