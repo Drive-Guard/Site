@@ -424,7 +424,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
                     {o.local ? ` • ${o.local}` : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {[o.relacionadoSonolencia ? "Ligada à sonolência" : "Sem relação com sonolência", o.gravidade ? ROTULO_GRAVIDADE_OCORRENCIA[o.gravidade] : null, o.causa]
+                    {[o.relacionadoSonolencia ? "Ligada à sonolência" : "Sem relação com sonolência", o.gravidade ? ROTULO_GRAVIDADE_OCORRENCIA[o.gravidade] : "Sem acidente", o.causa]
                       .filter(Boolean)
                       .join(" • ")}
                   </p>

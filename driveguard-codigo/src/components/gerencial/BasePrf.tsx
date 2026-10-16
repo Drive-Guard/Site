@@ -70,6 +70,30 @@ export function BasePrf() {
               </>
             )}
           </p>
+          {r?.perfilPesadosSonoPorAno && r.perfilPesadosSonoPorAno.length > 1 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-muted-foreground inline-flex items-center gap-1">
+                Caminhão/ônibus com condutor dormindo, por ano
+                <Dica texto="Acidentes de veículos pesados com a causa “condutor dormindo” em cada ano carregado da PRF (o ano corrente ainda está incompleto), com as mortes. Mostra a tendência nacional ao lado dos números da frota." />
+              </span>
+              {[...r.perfilPesadosSonoPorAno].sort((a, b) => a.ano - b.ano).map((a, i, lista) => {
+                const anterior = lista[i - 1];
+                const completo = a.ano < new Date().getFullYear();
+                const variacao = anterior && completo ? Math.round(((a.acidentes - anterior.acidentes) / anterior.acidentes) * 100) : null;
+                return (
+                  <span key={a.ano} className="px-2 py-0.5 rounded-md border border-border bg-secondary/50">
+                    <span className="font-medium text-foreground">{a.ano}</span> {num(a.acidentes)} • {num(a.mortos)} mortes
+                    {variacao !== null && (
+                      <span className={cn("ml-1 font-medium", variacao > 0 ? "text-risk-high" : "text-risk-low")}>
+                        {variacao > 0 ? "▲" : "▼"} {Math.abs(variacao)}%
+                      </span>
+                    )}
+                    {!completo && <span className="ml-1 text-muted-foreground">(parcial)</span>}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <SeloFonte href={r?.url}>{selo}</SeloFonte>

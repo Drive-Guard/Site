@@ -15,7 +15,7 @@ export interface Kpis {
   aoVivo: { motoristasAtivos: number; motoristasEmRisco: number; motoristasMonitorados: number; fadigaMedia: number | null };
   alertas24h: { total: number; anterior: number; variacao: number | null };
   /** Acidentes da própria frota (não os da PRF) no período e no anterior. */
-  acidentesFrota: { total: number; porSono: number; anterior: number };
+  acidentesFrota: { total: number; porSono: number; anterior: number; quaseAcidentes: number };
   horarioCritico: {
     inicio: string;
     fim: string;
@@ -151,6 +151,8 @@ export interface PrfResumo extends BasePrf {
   acidentesSono?: number;
   percentualSono?: number | null;
   mortos?: number;
+  /** Acidentes de veículos pesados com condutor dormindo, por ano (todos os anos carregados). */
+  perfilPesadosSonoPorAno?: { ano: number; acidentes: number; fatais: number; com_feridos: number; sem_vitimas: number; mortos: number }[];
 }
 
 export interface PrfFaixa extends BasePrf {

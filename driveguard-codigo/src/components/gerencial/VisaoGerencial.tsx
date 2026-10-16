@@ -131,6 +131,11 @@ export default function VisaoGerencial() {
                     {acidentes.total === 0
                       ? "Nenhum acidente da frota no período"
                       : `${acidentes.total} ${acidentes.total === 1 ? "acidente" : "acidentes"} da frota no período${acidentes.porSono ? ` (${acidentes.porSono} por sono)` : ""}`}
+                    {acidentes.quaseAcidentes > 0 && (
+                      <span className="text-muted-foreground">
+                        • {acidentes.quaseAcidentes} {acidentes.quaseAcidentes === 1 ? "quase-acidente" : "quase-acidentes"}
+                      </span>
+                    )}
                     <span className="text-muted-foreground hidden sm:inline">• {acidentes.anterior} no anterior</span>
                     <ArrowRight className="h-3 w-3" />
                   </button>

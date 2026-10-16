@@ -20,7 +20,7 @@ export const DICAS = {
   horarioCritico:
     "Janela de 2 horas que concentrou mais alertas no período. Clique para abrir os relatórios filtrados por essa faixa do dia.",
   acidentesFrota:
-    "Acidentes e ocorrências registrados pela própria frota (não os da PRF), no período e no período anterior. Clique para ver os motoristas envolvidos.",
+    "Acidentes da própria frota (não os da PRF) no período e no anterior, e os quase-acidentes (ocorrências sem acidente, como saída de faixa). Clique para ver os motoristas envolvidos.",
   roi:
     "Estimativa anual: acidentes por sono da frota × eficácia do alerta × cobertura de câmeras, valorizados pelo custo médio do IPEA corrigido pelo IPCA. Conservador usa a fração de sono registrada pela PRF; realista usa a fração do histórico da própria frota.",
   atendidos:
