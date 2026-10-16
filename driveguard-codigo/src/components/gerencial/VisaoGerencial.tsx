@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { BasePrf } from "./BasePrf";
 import { ImpactoRoi } from "./ImpactoRoi";
 import { Insights, useInsights } from "./Insights";
+import { DICAS } from "@/lib/dicas";
 
 export function useKpis() {
   const { query } = useFiltros();
@@ -51,7 +52,7 @@ export default function VisaoGerencial() {
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Motoristas em risco agora"
+          label="Motoristas em risco agora" info={DICAS.emRiscoAgora}
           value={k?.aoVivo.motoristasEmRisco ?? "—"}
           hint={k ? `${CRITERIO_EM_RISCO} • de ${k.aoVivo.motoristasAtivos} dirigindo` : undefined}
           icon={AlertTriangle}
@@ -61,7 +62,7 @@ export default function VisaoGerencial() {
           destino="Ver os motoristas em risco agora"
         />
         <KpiCard
-          label="Fadiga média"
+          label="Fadiga média" info={DICAS.fadigaMediaPeriodo}
           value={k ? num(k.periodo.fadigaMedia, 1) : "—"}
           hint={rotuloPeriodo.toLowerCase()}
           trend={k?.periodo.variacaoFadiga}
@@ -72,7 +73,7 @@ export default function VisaoGerencial() {
           destino="Ver os motoristas pela fadiga média de 30 dias"
         />
         <KpiCard
-          label="Alertas nas últimas 24h"
+          label="Alertas nas últimas 24h" info={DICAS.alertas24h}
           value={k?.alertas24h.total ?? "—"}
           hint="emitidos na cabine pelas câmeras"
           trend={k?.alertas24h.variacao}
@@ -84,7 +85,7 @@ export default function VisaoGerencial() {
           destino="Ver os alertas das últimas 24 horas"
         />
         <KpiCard
-          label="Horário crítico"
+          label="Horário crítico" info={DICAS.horarioCritico}
           value={k?.horarioCritico ? `${k.horarioCritico.inicio} – ${k.horarioCritico.fim}` : "—"}
           hint={k?.horarioCritico ? `${k.horarioCritico.percentual}% dos alertas da frota` : "sem alertas no período"}
           icon={Clock}
@@ -130,7 +131,7 @@ export default function VisaoGerencial() {
                     {acidentes.total === 0
                       ? "Nenhum acidente da frota no período"
                       : `${acidentes.total} ${acidentes.total === 1 ? "acidente" : "acidentes"} da frota no período${acidentes.porSono ? ` (${acidentes.porSono} por sono)` : ""}`}
-                    <span className="text-muted-foreground">• {acidentes.anterior} no anterior</span>
+                    <span className="text-muted-foreground hidden sm:inline">• {acidentes.anterior} no anterior</span>
                     <ArrowRight className="h-3 w-3" />
                   </button>
                 )}
@@ -175,7 +176,7 @@ export default function VisaoGerencial() {
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <ChartCard
-          title="Evolução da fadiga média"
+          title="Evolução da fadiga média" info={DICAS.evolucaoFadiga}
           subtitle={evolucao.data ? `Score diário da frota • ${variacao(evolucao.data.variacao) ?? "sem base"} vs período anterior` : "Score diário da frota"}
           action={
             evolucao.data?.variacao !== null && evolucao.data?.variacao !== undefined ? (
@@ -207,7 +208,7 @@ export default function VisaoGerencial() {
           </Conteudo>
         </ChartCard>
 
-        <ChartCard title="Rotas com maior incidência" subtitle="Ordenadas pela fadiga média, com o histórico da PRF nas BRs">
+        <ChartCard title="Rotas com maior incidência" info={DICAS.rotas} subtitle="Ordenadas pela fadiga média, com o histórico da PRF nas BRs">
           <Conteudo q={rotas} altura={300}>
             {(d) => <RiskRoutesList rotas={d} aoSelecionar={(r) => irPara("motoristas", { filtro: "todos", rota: `${r.origemCidade}|${r.destinoCidade}` })} />}
           </Conteudo>

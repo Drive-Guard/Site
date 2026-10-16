@@ -38,6 +38,7 @@ import { dataHora, hora, num } from "@/lib/formato";
 import { COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP } from "@/lib/risco";
 import type { PontoFadigaTempo, TempoReal, TendenciaTurno } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
+import { DICAS } from "@/lib/dicas";
 
 const ROTULO_GRAVIDADE: Record<string, string> = { critica: "Crítica", alta: "Alta", media: "Média", baixa: "Baixa" };
 
@@ -57,7 +58,7 @@ export default function Monitoramento() {
   const url = useParametros();
   const horas = Number(url.get("horas")) || 6;
   const soGraves = url.get("gravidade") === "graves";
-  const consultaTempoReal = { ...query, horas, gravidade: soGraves ? "graves" : undefined };
+  const consultaTempoReal = { regiao: query.regiao, tipo_veiculo: query.tipo_veiculo, horas, gravidade: soGraves ? "graves" : undefined };
   const rotuloJanela = horas >= 48 ? `Últimos ${Math.round(horas / 24)} dias` : `Últimas ${horas} horas`;
 
   const tempoReal = useQuery({
@@ -65,8 +66,12 @@ export default function Monitoramento() {
     queryFn: () => api.get<TempoReal>("/dashboard/alertas-tempo-real", consultaTempoReal),
     refetchInterval: 30_000,
   });
-  const tendencia = useQuery({ queryKey: ["tendencia", query], queryFn: () => api.get<TendenciaTurno>("/dashboard/tendencia-turno", query) });
-  const tempoDirecao = useQuery({ queryKey: ["fadiga-tempo", query], queryFn: () => api.get<PontoFadigaTempo[]>("/dashboard/fadiga-tempo-direcao", query) });
+  // Tela do "agora": cada gráfico tem a própria janela (sem o período global).
+  const dimensoes = { regiao: query.regiao, tipo_veiculo: query.tipo_veiculo };
+  const q7 = { ...dimensoes, periodo: "7d" };
+  const q30 = { ...dimensoes, periodo: "30d" };
+  const tendencia = useQuery({ queryKey: ["tendencia", q7], queryFn: () => api.get<TendenciaTurno>("/dashboard/tendencia-turno", q7) });
+  const tempoDirecao = useQuery({ queryKey: ["fadiga-tempo", q30], queryFn: () => api.get<PontoFadigaTempo[]>("/dashboard/fadiga-tempo-direcao", q30) });
 
   const tratar = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => api.patch(`/alertas/${id}`, { status }),
@@ -82,11 +87,11 @@ export default function Monitoramento() {
 
   return (
     <>
-      <Filters />
+      <Filters periodo={false} />
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Dirigindo agora"
+          label="Dirigindo agora" info={DICAS.dirigindoAgora}
           value={k?.aoVivo.motoristasAtivos ?? "—"}
           hint={k ? `de ${k.aoVivo.motoristasMonitorados} monitorados` : undefined}
           icon={Users}
@@ -95,7 +100,7 @@ export default function Monitoramento() {
           destino="Ver quem está dirigindo agora"
         />
         <KpiCard
-          label="Em risco agora"
+          label="Em risco agora" info={DICAS.emRiscoAgora}
           value={k?.aoVivo.motoristasEmRisco ?? "—"}
           hint={`${CRITERIO_EM_RISCO} na última leitura`}
           icon={AlertTriangle}
@@ -105,7 +110,7 @@ export default function Monitoramento() {
           destino="Ver os motoristas em risco agora"
         />
         <KpiCard
-          label="Fadiga média agora"
+          label="Fadiga média agora" info={DICAS.fadigaMediaAgora}
           value={k ? num(k.aoVivo.fadigaMedia, 1) : "—"}
           hint="motoristas dirigindo"
           icon={Gauge}
@@ -115,7 +120,7 @@ export default function Monitoramento() {
           destino="Ver os motoristas dirigindo, do maior para o menor score"
         />
         <KpiCard
-          label="Alertas nas últimas 24h"
+          label="Alertas nas últimas 24h" info={DICAS.alertas24h}
           value={k?.alertas24h.total ?? "—"}
           trend={k?.alertas24h.variacao}
           trendLabel="vs 24h anteriores"
@@ -132,8 +137,8 @@ export default function Monitoramento() {
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <ChartCard
-          title="Motoristas em risco agora"
-          subtitle="Fadiga calculada por visão computacional na cabine"
+          title="Motoristas em risco agora" info={DICAS.motoristasRisco}
+          subtitle="Agora (últimos 30 min) • score calculado pela câmera na cabine"
           action={
             <span className="inline-flex items-center gap-1.5 text-xs text-risk-low">
               <span className="h-2 w-2 rounded-full bg-risk-low pulse-dot" />
@@ -147,7 +152,7 @@ export default function Monitoramento() {
         </ChartCard>
 
         <ChartCard
-          title="Alertas recentes"
+          title="Alertas recentes" info={DICAS.alertasRecentes}
           subtitle={`${rotuloJanela}${soGraves ? " • só graves" : ""} • reconheça ou resolva`}
           className="xl:col-span-2 scroll-mt-24"
           action={
@@ -232,7 +237,7 @@ export default function Monitoramento() {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <ChartCard title="Tendência de sonolência ao longo do turno" subtitle="Score médio da frota por hora de direção (0–100)" className="xl:col-span-2">
+        <ChartCard title="Tendência de sonolência ao longo do turno" info={DICAS.tendenciaTurno} subtitle="Últimos 7 dias • score médio da frota por hora de direção (0–100)" className="xl:col-span-2">
           <Conteudo q={tendencia} altura={320}>
             {(d) => (
               <>
@@ -284,13 +289,13 @@ export default function Monitoramento() {
           </Conteudo>
         </ChartCard>
 
-        <ChartCard title="Heatmap: tempo de direção × dia" subtitle="Percentual das leituras classificadas como sonolento">
+        <ChartCard title="Heatmap: tempo de direção × dia" info={DICAS.heatmap} subtitle="Calendário próprio • % de leituras sonolentas ou score médio">
           <Heatmap />
         </ChartCard>
       </section>
 
       <section className="grid grid-cols-1">
-        <ChartCard title="Fadiga vs tempo de direção" subtitle="Score médio por faixa de horas ao volante • tamanho do ponto = alertas emitidos">
+        <ChartCard title="Fadiga vs tempo de direção" info={DICAS.fadigaTempo} subtitle="Últimos 30 dias • score médio por faixa de horas ao volante • tamanho do ponto = alertas emitidos">
           <Conteudo q={tempoDirecao} altura={280}>
             {(d) => (
               <ResponsiveContainer width="100%" height={280}>

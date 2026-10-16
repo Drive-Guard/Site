@@ -11,6 +11,7 @@ import { relativo } from "@/lib/formato";
 import { CHIP_RISCO, ROTULO_SEVERIDADE } from "@/lib/risco";
 import type { Insights as TipoInsights } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
+import { DICAS } from "@/lib/dicas";
 
 /** Só o período do filtro: os insights cobrem a frota inteira, sem região nem tipo de veículo. */
 function usePeriodoDosInsights(): Query {
@@ -47,7 +48,7 @@ export function Insights() {
 
   return (
     <ChartCard
-      title="Insights & recomendações automáticas"
+      title="Insights & recomendações automáticas" info={DICAS.insights}
       subtitle={d ? `Geradas por ${origem} ${relativo(d.geradoEm)} • período: ${d.periodo.rotulo}${d.atualizando ? " • atualizando…" : ""}` : "Geradas com base nos padrões detectados"}
       action={
         <div className="flex items-center gap-2">

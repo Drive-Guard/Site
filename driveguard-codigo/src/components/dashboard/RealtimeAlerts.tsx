@@ -1,5 +1,7 @@
 import { AlertTriangle, Clock, Eye, TrendingDown, TrendingUp } from "lucide-react";
+import { Dica } from "@/components/comum/Dica";
 import { Vazio } from "@/components/comum/Estado";
+import { DICAS } from "@/lib/dicas";
 import { num, relativo } from "@/lib/formato";
 import { CHIP_RISCO, PONTO_RISCO } from "@/lib/risco";
 import type { MotoristaTempoReal } from "@/lib/tipos";
@@ -42,7 +44,11 @@ export function RealtimeAlerts({ motoristas, aoSelecionar }: { motoristas: Motor
           <div className="text-right">
             <div className="flex items-center gap-1 justify-end">
               <span className="text-lg font-bold leading-none">{num(a.score, 0)}</span>
-              {a.tendencia === "up" ? <TrendingUp className="h-3.5 w-3.5 text-risk-high" /> : a.tendencia === "down" ? <TrendingDown className="h-3.5 w-3.5 text-risk-low" /> : null}
+              {(a.tendencia === "up" || a.tendencia === "down") && (
+                <Dica lado="left" texto={DICAS.tendencia}>
+                  {a.tendencia === "up" ? <TrendingUp className="h-3.5 w-3.5 text-risk-high" /> : <TrendingDown className="h-3.5 w-3.5 text-risk-low" />}
+                </Dica>
+              )}
             </div>
             <div className="text-[10px] uppercase tracking-wider opacity-80">fadiga</div>
           </div>

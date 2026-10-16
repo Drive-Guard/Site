@@ -41,6 +41,8 @@ import { useParametros } from "@/lib/navegacao";
 import { COR, ESTILO_TOOLTIP } from "@/lib/risco";
 import type { Agendamento, RelatorioGerado, ResumoRelatorio, VeiculoCadastro } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
+import { DICAS } from "@/lib/dicas";
+import { Dica } from "@/components/comum/Dica";
 
 const selectClass =
   "bg-secondary/60 border border-border text-sm rounded-lg pl-9 pr-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none w-full";
@@ -206,11 +208,11 @@ export default function ReportsCenter() {
       </div>
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Alertas registrados" value={r ? num(r.kpis.eventos) : "—"} hint={r ? `${num(r.kpis.alertasGraves)} graves • ${r.kpis.percentualAtendidos === null ? "—" : `${num(r.kpis.percentualAtendidos)}%`} atendidos (${num(r.kpis.alertasAtendidos)})` : undefined} trend={r?.kpis.variacaoEventos} icon={Activity} variant="risk" carregando={resumo.isLoading} />
+        <KpiCard label="Alertas registrados" info={DICAS.relatorioAlertas} value={r ? num(r.kpis.eventos) : "—"} hint={r ? `${num(r.kpis.alertasGraves)} graves • ${r.kpis.percentualAtendidos === null ? "—" : `${num(r.kpis.percentualAtendidos)}%`} atendidos (${num(r.kpis.alertasAtendidos)})` : undefined} trend={r?.kpis.variacaoEventos} icon={Activity} variant="risk" carregando={resumo.isLoading} />
         <KpiCard label="Motoristas analisados" value={r ? num(r.kpis.motoristasAnalisados) : "—"} hint={r ? `${num(r.kpis.turnos)} turnos` : undefined} icon={Users} carregando={resumo.isLoading} />
         <KpiCard label="Veículos analisados" value={r ? num(r.kpis.veiculosAnalisados) : "—"} hint={r ? `${num(r.kpis.horasDirigidas)} h dirigidas` : undefined} icon={Truck} variant="warning" carregando={resumo.isLoading} />
         <KpiCard
-          label="Economia estimada"
+          label="Economia estimada" info={DICAS.relatorioEconomia}
           value={r ? (r.kpis.economiaDisponivel ? reais(r.kpis.economiaEstimada, true) : "—") : "—"}
           hint={r?.kpis.economiaDisponivel ? "cenário conservador, no período" : "informe os dados do ROI em Cadastros"}
           icon={DollarSign}
@@ -220,7 +222,7 @@ export default function ReportsCenter() {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <ChartCard title="Evolução da fadiga" subtitle="Score médio diário no período filtrado" className="xl:col-span-2">
+        <ChartCard title="Evolução da fadiga" info={DICAS.evolucaoFadiga} subtitle="Score médio diário no período filtrado" className="xl:col-span-2">
           <Conteudo q={resumo} altura={300}>
             {(d) => (
               <ResponsiveContainer width="100%" height={300}>
@@ -268,7 +270,7 @@ export default function ReportsCenter() {
               <Bot className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-base font-semibold tracking-tight">Resumo inteligente</h2>
+              <h2 className="text-base font-semibold tracking-tight flex items-center gap-1.5">Resumo inteligente <Dica texto={DICAS.resumoInteligente} /></h2>
               <p className="text-xs text-muted-foreground">
                 {r?.resumoInteligente.origem === "ia" ? "Gerado pela IA para o período dos filtros" : "Gerado automaticamente com base nos filtros aplicados"}
               </p>

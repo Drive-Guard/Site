@@ -1,4 +1,6 @@
 import { ArrowUpRight, type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { Dica } from "@/components/comum/Dica";
 import { cn } from "@/lib/utils";
 
 interface KpiCardProps {
@@ -16,6 +18,8 @@ interface KpiCardProps {
   aoClicar?: () => void;
   /** Para onde o atalho leva (aparece ao passar o mouse e para leitores de tela). */
   destino?: string;
+  /** Explicação do indicador (ícone "i" ao lado do rótulo). */
+  info?: ReactNode;
 }
 
 const ICONE: Record<NonNullable<KpiCardProps["variant"]>, string> = {
@@ -25,7 +29,7 @@ const ICONE: Record<NonNullable<KpiCardProps["variant"]>, string> = {
   warning: "bg-risk-medium/15 text-risk-medium",
 };
 
-export function KpiCard({ label, value, hint, icon: Icon, trend, trendLabel = "vs período anterior", melhorQuandoSobe, variant = "default", carregando, aoClicar, destino }: KpiCardProps) {
+export function KpiCard({ label, value, hint, icon: Icon, trend, trendLabel = "vs período anterior", melhorQuandoSobe, variant = "default", carregando, aoClicar, destino, info }: KpiCardProps) {
   // Variação abaixo de 1% é estável: nem seta nem cor de alerta.
   const estavel = trend !== undefined && trend !== null && Math.abs(trend) < 1;
   const ruim = !estavel && trend !== undefined && trend !== null && (melhorQuandoSobe ? trend < 0 : trend > 0);
@@ -33,11 +37,14 @@ export function KpiCard({ label, value, hint, icon: Icon, trend, trendLabel = "v
   const conteudo = (
     <div className="relative flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+          {label}
+          {info && <Dica texto={info} />}
+        </p>
         {carregando ? (
           <div className="mt-3 h-8 w-24 rounded bg-secondary animate-pulse" />
         ) : (
-          <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground truncate tabular-nums">{value}</p>
+          <p className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-foreground break-words tabular-nums">{value}</p>
         )}
         {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
         {trend !== undefined && trend !== null && (
@@ -55,7 +62,7 @@ export function KpiCard({ label, value, hint, icon: Icon, trend, trendLabel = "v
     </div>
   );
 
-  const classe = "glass-card rounded-xl p-5 relative overflow-hidden group text-left w-full";
+  const classe = "glass-card rounded-xl p-4 sm:p-5 relative overflow-hidden group text-left w-full";
   if (!aoClicar) return <div className={classe}>{conteudo}</div>;
   return (
     <button type="button" onClick={aoClicar} title={destino} aria-label={destino ? `${label}: ${value}. ${destino}` : undefined} className={cn(classe, "clicavel")}>

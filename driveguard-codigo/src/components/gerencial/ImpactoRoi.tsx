@@ -12,6 +12,8 @@ import { num, pct, reais } from "@/lib/formato";
 import { useIrPara } from "@/lib/navegacao";
 import type { Roi } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
+import { Dica } from "@/components/comum/Dica";
+import { DICAS } from "@/lib/dicas";
 
 function valorParametro(valor: number | null, unidade: string) {
   if (valor === null) return "não informado";
@@ -29,7 +31,7 @@ export function ImpactoRoi() {
     <div className="glass-card rounded-xl p-6 relative overflow-hidden h-full">
       <div className="relative">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Impacto estimado por ano</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">Impacto estimado por ano <Dica texto={DICAS.roi} /></p>
           <div className="flex rounded-lg border border-border p-0.5 text-[11px]">
             {(["conservador", "realista"] as const).map((c) => (
               <button key={c} onClick={() => setCenario(c)} className={cn("px-2 py-0.5 rounded-md capitalize", cenario === c ? "bg-primary/20 text-primary" : "text-muted-foreground")}>
@@ -79,7 +81,7 @@ export function ImpactoRoi() {
                     title="Ver os alertas graves dos últimos 30 dias"
                     className="clicavel mt-3 w-full text-left rounded-lg border border-border px-3 py-2 text-[11px] text-muted-foreground"
                   >
-                    Alertas graves atendidos (30 dias):{" "}
+                    Alertas graves atendidos (30 dias) <Dica texto={DICAS.atendidos} />:{" "}
                     <span className="text-foreground font-semibold text-xs">{pct(roi.alertasAtendidos30d.percentual)}</span>
                     <span className="block">
                       {num(roi.alertasAtendidos30d.atendidos)} de {num(roi.alertasAtendidos30d.graves)} com pausa, contato, troca ou encerramento registrado

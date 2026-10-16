@@ -43,6 +43,8 @@ import { cn } from "@/lib/utils";
 import { ChartCard } from "./ChartCard";
 import { Filters } from "./Filters";
 import { KpiCard } from "./KpiCard";
+import { DICAS } from "@/lib/dicas";
+import { Dica } from "@/components/comum/Dica";
 
 const ICONES: Record<string, typeof AlertTriangle> = {
   alerta: AlertTriangle,
@@ -109,7 +111,7 @@ export default function DriversMonitor() {
 
   return (
     <>
-      <Filters exportar={false} />
+      <Filters exportar={false} periodo={false} />
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
         <aside className="lg:col-span-3">
           <div className="glass-card rounded-xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
@@ -199,7 +201,21 @@ export default function DriversMonitor() {
                               <div className="text-right">
                                 <div className="flex items-center gap-1 justify-end">
                                   <span className="text-lg font-bold leading-none">{num(d.score, 0)}</span>
-                                  {d.ativo && (d.tendencia === "up" ? <TrendingUp className="h-3.5 w-3.5 text-risk-high" /> : d.tendencia === "down" ? <TrendingDown className="h-3.5 w-3.5 text-risk-low" /> : null)}
+                                  {d.ativo && (d.tendencia === "up" || d.tendencia === "down") && (
+                                    <Dica
+                                      lado="left"
+                                      texto={
+                                        <>
+                                          <b>{d.tendencia === "up" ? "Fadiga subindo" : "Fadiga caindo"}</b>: a última leitura ({num(d.score, 0)}) está{" "}
+                                          {d.tendencia === "up" ? "acima" : "abaixo"} da média das 5 leituras anteriores ({num(d.scoreAnterior, 1)}).
+                                          <br />
+                                          Laranja para cima = piorando; verde para baixo = melhorando. Variação de até 1 ponto não mostra seta.
+                                        </>
+                                      }
+                                    >
+                                      {d.tendencia === "up" ? <TrendingUp className="h-3.5 w-3.5 text-risk-high" /> : <TrendingDown className="h-3.5 w-3.5 text-risk-low" />}
+                                    </Dica>
+                                  )}
                                 </div>
                                 <span className={cn("mt-1 inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border", CHIP_RISCO[d.ativo ? d.risco : "sem_dados"])}>
                                   {d.ativo ? ROTULO_RISCO[d.risco] : "fora do turno"}
@@ -236,10 +252,10 @@ function PainelFrota({ lista, aoSelecionar }: { lista: MotoristaAoVivo[]; aoSele
         <p className="text-xs text-muted-foreground">{lista.length} dirigindo agora. Selecione um motorista para ver o turno, os insights e registrar ações.</p>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Score médio" value={num(media, 0)} hint="motoristas dirigindo" icon={Gauge} variant={(media ?? 0) >= 70 ? "risk" : (media ?? 0) >= 50 ? "warning" : "safe"} />
-        <KpiCard label="Tempo médio de turno" value={horas === null ? "—" : `${num(horas, 1)}h`} hint="turnos em andamento" icon={Clock} variant={(horas ?? 0) >= 8 ? "risk" : "default"} />
-        <KpiCard label="Alertas hoje" value={alertas} hint="motoristas dirigindo" icon={AlertTriangle} variant="warning" />
-        <KpiCard label="Em risco" value={criticos.length} hint={CRITERIO_EM_RISCO} icon={Zap} variant="risk" />
+        <KpiCard label="Score médio" info={DICAS.fadigaMediaAgora} value={num(media, 0)} hint="motoristas dirigindo" icon={Gauge} variant={(media ?? 0) >= 70 ? "risk" : (media ?? 0) >= 50 ? "warning" : "safe"} />
+        <KpiCard label="Tempo médio de turno" info={DICAS.tempoDirigindo} value={horas === null ? "—" : `${num(horas, 1)}h`} hint="turnos em andamento" icon={Clock} variant={(horas ?? 0) >= 8 ? "risk" : "default"} />
+        <KpiCard label="Alertas hoje" info={DICAS.alertasHoje} value={alertas} hint="motoristas dirigindo" icon={AlertTriangle} variant="warning" />
+        <KpiCard label="Em risco" info={DICAS.emRiscoAgora} value={criticos.length} hint={CRITERIO_EM_RISCO} icon={Zap} variant="risk" />
       </div>
       <ChartCard title="Quem precisa de atenção" subtitle="Motoristas com score alto ou turno longo">
         {criticos.length === 0 && lista.every((d) => (d.horasTurno ?? 0) < 6) ? (
@@ -300,7 +316,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Score de fadiga"
+          label="Score de fadiga" info={DICAS.scoreMotorista}
           value={d?.agora ? num(d.agora.score, 0) : "—"}
           hint={d?.agora ? `última leitura ${relativo(d.agora.ultimaLeituraEm)}` : "sem leitura"}
           icon={Gauge}
@@ -308,16 +324,16 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
           carregando={detalhe.isLoading}
         />
         <KpiCard
-          label="Tempo dirigindo"
+          label="Tempo dirigindo" info={DICAS.tempoDirigindo}
           value={d?.agora?.horasTurno !== undefined && d?.agora?.horasTurno !== null ? `${num(d.agora.horasTurno, 1)}h` : "—"}
           hint={d?.agora?.turnoStatus === "em_andamento" ? "turno em andamento" : "último turno"}
           icon={Clock}
           variant={(d?.agora?.horasTurno ?? 0) >= 8 ? "risk" : "default"}
           carregando={detalhe.isLoading}
         />
-        <KpiCard label="Alertas hoje" value={d?.agora?.alertasHoje ?? 0} hint={d ? `${d.ultimos30d.alertasGraves} graves em 30 dias` : undefined} icon={AlertTriangle} variant="warning" carregando={detalhe.isLoading} />
+        <KpiCard label="Alertas hoje" info={DICAS.alertasHoje} value={d?.agora?.alertasHoje ?? 0} hint={d ? `${d.ultimos30d.alertasGraves} graves em 30 dias` : undefined} icon={AlertTriangle} variant="warning" carregando={detalhe.isLoading} />
         <KpiCard
-          label="Média de 30 dias"
+          label="Média de 30 dias" info={DICAS.media30d}
           value={d ? num(d.ultimos30d.scoreMedio, 1) : "—"}
           hint={d?.ultimos30d.mediaDaFrota !== null && d ? `frota: ${num(d.ultimos30d.mediaDaFrota, 1)} • ${d.ultimos30d.posicaoRisco}º em risco` : undefined}
           icon={Sparkles}
@@ -328,7 +344,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <ChartCard
-          title="Evolução da fadiga no turno"
+          title="Evolução da fadiga no turno" info={DICAS.curvaTurno}
           subtitle={
             curva.data?.turno
               ? `Turno iniciado ${dataHora(curva.data.turno.iniciadoEm)}${curva.data.turno.origem ? ` • ${curva.data.turno.origem} → ${curva.data.turno.destino}` : ""} • tracejado: média da frota`
@@ -364,7 +380,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
         </ChartCard>
 
         <div className="flex flex-col gap-4">
-          <ChartCard title="Insights do motorista" subtitle="Regras sobre o estado atual e os últimos 30 dias">
+          <ChartCard title="Insights do motorista" info={DICAS.insightsMotorista} subtitle="Regras sobre o estado atual e os últimos 30 dias">
             <Conteudo q={insights} altura={200}>
               {(lista) => (
                 <div className="space-y-2.5">
@@ -394,7 +410,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
         </div>
       </div>
 
-      <ChartCard title="Ocorrências do motorista" subtitle="Acidentes e ocorrências da própria frota registrados para este motorista">
+      <ChartCard title="Ocorrências do motorista" info={DICAS.ocorrenciasMotorista} subtitle="Acidentes e ocorrências da própria frota registrados para este motorista">
         {!d ? null : d.ocorrencias.length === 0 ? (
           <Vazio>Nenhuma ocorrência registrada.</Vazio>
         ) : (
@@ -448,7 +464,7 @@ function AcoesRapidas({ motorista }: { motorista: MotoristaDetalhe }) {
   ];
 
   return (
-    <ChartCard title="Ações rápidas" subtitle="O alerta sonoro já tocou na cabine; aqui fica a resposta da central">
+    <ChartCard title="Ações rápidas" info={DICAS.acoesRapidas} subtitle="O alerta sonoro já tocou na cabine; aqui fica a resposta da central">
       <div className="grid grid-cols-1 gap-2">
         {botoes.map((b) => (
           <button

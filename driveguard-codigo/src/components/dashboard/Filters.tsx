@@ -5,6 +5,8 @@ import { SeletorIntervalo } from "@/components/comum/SeletorIntervalo";
 import { baixarCsv, mensagemDeErro } from "@/lib/api";
 import { type Periodo, ROTULO_PERIODO, useFiltros } from "@/lib/filtros";
 import { diaIso } from "@/lib/formato";
+import { Dica } from "@/components/comum/Dica";
+import { DICAS } from "@/lib/dicas";
 
 const select =
   "bg-secondary/60 border border-border text-sm rounded-lg pl-9 pr-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none";
@@ -17,7 +19,12 @@ export const TIPOS_VEICULO = [
   { valor: "carro_app", rotulo: "Carro App" },
 ];
 
-export function Filters({ ao_vivo = true, exportar = true }: { ao_vivo?: boolean; exportar?: boolean }) {
+/**
+ * Filtros globais. O período só aparece nas telas que olham para um intervalo
+ * (Visão Gerencial); as telas do "agora" (Monitoramento, Motoristas) usam
+ * janelas próprias em cada quadro e mostram o selo "Tempo real".
+ */
+export function Filters({ ao_vivo = true, exportar = true, periodo = true }: { ao_vivo?: boolean; exportar?: boolean; periodo?: boolean }) {
   const { filtros, definir, query } = useFiltros();
   const [baixando, setBaixando] = useState(false);
 
@@ -34,22 +41,24 @@ export function Filters({ ao_vivo = true, exportar = true }: { ao_vivo?: boolean
 
   return (
     <div className="glass-card rounded-xl p-4 flex flex-wrap items-center gap-3">
-      <div className="relative">
-        <Calendar className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select className={select} value={filtros.periodo} onChange={(e) => definir({ periodo: e.target.value as Periodo })}>
-          {(Object.keys(ROTULO_PERIODO) as Periodo[]).map((p) => (
-            <option key={p} value={p}>
-              {ROTULO_PERIODO[p]}
-            </option>
-          ))}
-        </select>
-      </div>
-      {filtros.periodo === "personalizado" && (
+      {periodo && (
+        <div className="relative">
+          <Calendar className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <select aria-label="Período" className={select} value={filtros.periodo} onChange={(e) => definir({ periodo: e.target.value as Periodo })}>
+            {(Object.keys(ROTULO_PERIODO) as Periodo[]).map((p) => (
+              <option key={p} value={p}>
+                {ROTULO_PERIODO[p]}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {periodo && filtros.periodo === "personalizado" && (
         <SeletorIntervalo de={filtros.de} ate={filtros.ate} maxDias={400} aoMudar={(de, ate) => definir({ de, ate })} />
       )}
       <div className="relative">
         <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select className={select} value={filtros.regiao} onChange={(e) => definir({ regiao: e.target.value })}>
+        <select aria-label="Região" className={select} value={filtros.regiao} onChange={(e) => definir({ regiao: e.target.value })}>
           <option value="">Todas as regiões</option>
           {REGIOES.map((r) => (
             <option key={r}>{r}</option>
@@ -58,7 +67,7 @@ export function Filters({ ao_vivo = true, exportar = true }: { ao_vivo?: boolean
       </div>
       <div className="relative">
         <Truck className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select className={select} value={filtros.tipoVeiculo} onChange={(e) => definir({ tipoVeiculo: e.target.value })}>
+        <select aria-label="Tipo de veículo" className={select} value={filtros.tipoVeiculo} onChange={(e) => definir({ tipoVeiculo: e.target.value })}>
           <option value="">Todos os veículos</option>
           {TIPOS_VEICULO.map((t) => (
             <option key={t.valor} value={t.valor}>
@@ -71,7 +80,8 @@ export function Filters({ ao_vivo = true, exportar = true }: { ao_vivo?: boolean
         {ao_vivo && (
           <div className="flex items-center gap-2 text-xs text-risk-low font-medium px-3 py-2 rounded-lg bg-risk-low/10 border border-risk-low/30">
             <span className="h-2 w-2 rounded-full bg-risk-low pulse-dot" />
-            Ao vivo • atualiza a cada 30 s
+            {periodo ? "Ao vivo • atualiza a cada 30 s" : "Tempo real • atualiza a cada 30 s"}
+            {!periodo && <Dica texto={DICAS.telaAoVivo} />}
           </div>
         )}
         {exportar && (

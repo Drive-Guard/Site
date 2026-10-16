@@ -251,6 +251,8 @@ export interface MotoristaAoVivo {
   ativo: boolean;
   scoreMedio30d: number | null;
   /** Acidentes/ocorrências da frota no período (base do filtro "com ocorrências"). */
+  /** Média das 5 leituras anteriores (base da seta de tendência). */
+  scoreAnterior: number | null;
   ocorrencias: number;
   ocorrenciasSono: number;
   /** Rota do turno mais recente ("Origem → Destino"). */

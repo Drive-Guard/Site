@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Login } from "@/components/auth/Login";
 import { Shell } from "@/components/layout/Shell";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -53,7 +54,9 @@ export function App() {
   return (
     <QueryClientProvider client={cliente}>
       <AuthProvider>
-        <Conteudo />
+        <TooltipProvider delayDuration={150}>
+          <Conteudo />
+        </TooltipProvider>
         <Toaster richColors position="top-right" />
       </AuthProvider>
     </QueryClientProvider>

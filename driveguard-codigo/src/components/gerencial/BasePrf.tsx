@@ -18,6 +18,19 @@ import { mesAno, num, pct } from "@/lib/formato";
 import { COR, ESTILO_TOOLTIP } from "@/lib/risco";
 import type { PrfCausas, PrfFaixa, PrfMapa, PrfResumo } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
+import { DICAS } from "@/lib/dicas";
+import { Dica } from "@/components/comum/Dica";
+
+/** "Madrugada 0h–6h" em duas linhas: cabe no celular sem sobrepor. */
+function RotuloDuasLinhas({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const [nome, ...resto] = String(payload?.value ?? "").split(" ");
+  return (
+    <text x={x} y={y} textAnchor="middle" fill={COR.eixo} fontSize={10}>
+      <tspan x={x} dy={12}>{nome}</tspan>
+      {resto.length > 0 && <tspan x={x} dy={12}>{resto.join(" ")}</tspan>}
+    </text>
+  );
+}
 
 const CORES_FAIXA: Record<string, string> = { madrugada: "var(--risk-critical)", manha: "var(--risk-low)", tarde: "var(--risk-medium)", noite: "var(--risk-high)" };
 
@@ -48,7 +61,7 @@ export function BasePrf() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Base comparativa nacional</h2>
+          <h2 className="text-lg font-semibold tracking-tight flex items-center gap-1.5">Base comparativa nacional <Dica texto={DICAS.basePrf} /></h2>
           <p className="text-xs text-muted-foreground">
             Acidentes em rodovias federais registrados pela Polícia Rodoviária Federal.{" "}
             {r?.carregada && (
@@ -74,13 +87,13 @@ export function BasePrf() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <ChartCard title="Acidentes por sono por faixa horária" subtitle="Condutor dormindo, por horário do acidente" action={<SeloFonte>PRF</SeloFonte>}>
+        <ChartCard title="Acidentes por sono por faixa horária" info={DICAS.prfFaixa} subtitle="Condutor dormindo, por horário do acidente" action={<SeloFonte>PRF</SeloFonte>}>
           <Conteudo q={faixa} altura={360}>
             {(d) => (
               <ResponsiveContainer width="100%" height={360}>
                 <BarChart data={d.faixas}>
                   <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
-                  <XAxis dataKey="rotulo" stroke={COR.eixo} fontSize={10} interval={0} />
+                  <XAxis dataKey="rotulo" stroke={COR.eixo} fontSize={10} interval={0} height={36} tick={<RotuloDuasLinhas />} />
                   <YAxis stroke={COR.eixo} fontSize={12} />
                   <Tooltip
                     cursor={{ fill: COR.cursor }}
@@ -98,7 +111,7 @@ export function BasePrf() {
           </Conteudo>
         </ChartCard>
 
-        <ChartCard title="Principais causas de acidentes" subtitle="Sono destacado entre as causas registradas" action={<SeloFonte>PRF</SeloFonte>}>
+        <ChartCard title="Principais causas de acidentes" info={DICAS.prfCausas} subtitle="Sono destacado entre as causas registradas" action={<SeloFonte>PRF</SeloFonte>}>
           <Conteudo q={causas} altura={260}>
             {(d) => (
               <ResponsiveContainer width="100%" height={Math.max(360, d.causas.length * 40)}>
@@ -118,7 +131,7 @@ export function BasePrf() {
           </Conteudo>
         </ChartCard>
 
-        <ChartCard title="Onde mais ocorrem acidentes por sono" subtitle="Municípios com mais casos de condutor dormindo" action={<SeloFonte>PRF</SeloFonte>}>
+        <ChartCard title="Onde mais ocorrem acidentes por sono" info={DICAS.prfMapa} subtitle="Municípios com mais casos de condutor dormindo" action={<SeloFonte>PRF</SeloFonte>}>
           <Conteudo q={mapa} altura={320}>
             {(d) => (d.cidades.length ? <BrazilMap cidades={d.cidades} /> : <Vazio>Sem acidentes por sono no recorte.</Vazio>)}
           </Conteudo>

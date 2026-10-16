@@ -225,6 +225,19 @@
     background-color: var(--scrollbar-thumb-hover);
   }
 
+  /*
+   * Tooltip dos gráficos (Recharts): o texto dos itens herdava a cor da série,
+   * e em barras com cor por célula vinha preto, ilegível no modo escuro.
+   */
+  .recharts-default-tooltip {
+    background-color: var(--color-popover) !important;
+    border-color: var(--color-border) !important;
+  }
+  .recharts-default-tooltip .recharts-tooltip-label,
+  .recharts-default-tooltip .recharts-tooltip-item {
+    color: var(--color-popover-foreground) !important;
+  }
+
   /* Opções dos <select> nativos no tema. */
   option {
     background-color: var(--color-popover);
