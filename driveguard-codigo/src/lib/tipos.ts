@@ -282,6 +282,17 @@ export interface MotoristaDetalhe {
     inclinacaoCabecaMedia: number | null;
     mediaDaFrota: number | null;
   };
+  /** Acidentes e ocorrências da própria frota (não os da PRF). */
+  ocorrencias: {
+    id: string;
+    ocorridoEm: string;
+    gravidade: "sem_vitimas" | "com_feridos" | "com_fatais" | null;
+    causa: string | null;
+    tipo: string | null;
+    local: string | null;
+    relacionadoSonolencia: boolean;
+    descricao: string | null;
+  }[];
 }
 
 export interface CurvaTurno {

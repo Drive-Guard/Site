@@ -310,9 +310,41 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
           {d && <AcoesRapidas motorista={d} />}
         </div>
       </div>
+
+      <ChartCard title="Ocorrências do motorista" subtitle="Acidentes e ocorrências da própria frota registrados para este motorista">
+        {!d ? null : d.ocorrencias.length === 0 ? (
+          <Vazio>Nenhuma ocorrência registrada.</Vazio>
+        ) : (
+          <ul className="divide-y divide-border">
+            {d.ocorrencias.map((o) => (
+              <li key={o.id} className="py-3 flex gap-3">
+                <AlertTriangle className={cn("h-4 w-4 mt-0.5 shrink-0", o.relacionadoSonolencia ? "text-risk-high" : "text-muted-foreground")} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    {o.tipo ?? "Ocorrência"} • {dataHora(o.ocorridoEm)}
+                    {o.local ? ` • ${o.local}` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {[o.relacionadoSonolencia ? "Ligada à sonolência" : "Sem relação com sonolência", o.gravidade ? ROTULO_GRAVIDADE_OCORRENCIA[o.gravidade] : null, o.causa]
+                      .filter(Boolean)
+                      .join(" • ")}
+                  </p>
+                  {o.descricao && <p className="text-xs text-muted-foreground mt-1 leading-snug">{o.descricao}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </ChartCard>
     </>
   );
 }
+
+const ROTULO_GRAVIDADE_OCORRENCIA: Record<string, string> = {
+  sem_vitimas: "Sem vítimas",
+  com_feridos: "Com feridos",
+  com_fatais: "Com vítimas fatais",
+};
 
 function AcoesRapidas({ motorista }: { motorista: MotoristaDetalhe }) {
   const cliente = useQueryClient();
