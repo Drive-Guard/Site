@@ -33,7 +33,7 @@ export function Filters({ ao_vivo = true, exportar = true }: { ao_vivo?: boolean
   }
 
   return (
-    <div className="glass-card rounded-2xl p-4 flex flex-wrap items-center gap-3">
+    <div className="glass-card rounded-xl p-4 flex flex-wrap items-center gap-3">
       <div className="relative">
         <Calendar className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <select className={select} value={filtros.periodo} onChange={(e) => definir({ periodo: e.target.value as Periodo })}>

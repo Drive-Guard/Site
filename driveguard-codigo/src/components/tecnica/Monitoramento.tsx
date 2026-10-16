@@ -6,9 +6,8 @@
  * central vê o registro e o trata (reconhecer, resolver, registrar pausa).
  */
 
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Brain, Check, CheckCheck, Eye, Gauge, Users } from "lucide-react";
+import { Activity, AlertTriangle, Brain, Check, CheckCheck, Eye, Gauge, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Area,
@@ -34,10 +33,13 @@ import { Conteudo, Vazio } from "@/components/comum/Estado";
 import { useKpis } from "@/components/gerencial/VisaoGerencial";
 import { api, mensagemDeErro } from "@/lib/api";
 import { useFiltros } from "@/lib/filtros";
-import { hora, num } from "@/lib/formato";
-import { COR, ESTILO_TOOLTIP } from "@/lib/risco";
+import { escreverParametros, useIrPara, useParametros } from "@/lib/navegacao";
+import { dataHora, hora, num } from "@/lib/formato";
+import { COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP } from "@/lib/risco";
 import type { PontoFadigaTempo, TempoReal, TendenciaTurno } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
+
+const ROTULO_GRAVIDADE: Record<string, string> = { critica: "Crítica", alta: "Alta", media: "Média", baixa: "Baixa" };
 
 const COR_GRAVIDADE: Record<string, string> = {
   critica: "text-risk-critical",
@@ -50,9 +52,19 @@ export default function Monitoramento() {
   const { query } = useFiltros();
   const kpis = useKpis();
   const cliente = useQueryClient();
-  const [focado, setFocado] = useState<string | null>(null);
+  const irPara = useIrPara();
+  // Janela dos alertas: 6 h por padrão; os atalhos pedem 24 h ou 30 dias (só graves).
+  const url = useParametros();
+  const horas = Number(url.get("horas")) || 6;
+  const soGraves = url.get("gravidade") === "graves";
+  const consultaTempoReal = { ...query, horas, gravidade: soGraves ? "graves" : undefined };
+  const rotuloJanela = horas >= 48 ? `Últimos ${Math.round(horas / 24)} dias` : `Últimas ${horas} horas`;
 
-  const tempoReal = useQuery({ queryKey: ["tempo-real", query], queryFn: () => api.get<TempoReal>("/dashboard/alertas-tempo-real", query), refetchInterval: 30_000 });
+  const tempoReal = useQuery({
+    queryKey: ["tempo-real", consultaTempoReal],
+    queryFn: () => api.get<TempoReal>("/dashboard/alertas-tempo-real", consultaTempoReal),
+    refetchInterval: 30_000,
+  });
   const tendencia = useQuery({ queryKey: ["tendencia", query], queryFn: () => api.get<TendenciaTurno>("/dashboard/tendencia-turno", query) });
   const tempoDirecao = useQuery({ queryKey: ["fadiga-tempo", query], queryFn: () => api.get<PontoFadigaTempo[]>("/dashboard/fadiga-tempo-direcao", query) });
 
@@ -73,10 +85,49 @@ export default function Monitoramento() {
       <Filters />
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Dirigindo agora" value={k?.aoVivo.motoristasAtivos ?? "—"} hint={k ? `de ${k.aoVivo.motoristasMonitorados} monitorados` : undefined} icon={Users} carregando={kpis.isLoading} />
-        <KpiCard label="Em risco agora" value={k?.aoVivo.motoristasEmRisco ?? "—"} hint="score ≥ 60 na última leitura" icon={AlertTriangle} variant="risk" carregando={kpis.isLoading} />
-        <KpiCard label="Fadiga média agora" value={k ? num(k.aoVivo.fadigaMedia, 1) : "—"} hint="motoristas dirigindo" icon={Gauge} variant="warning" carregando={kpis.isLoading} />
-        <KpiCard label="Alertas nas últimas 24h" value={k?.alertas24h.total ?? "—"} trend={k?.alertas24h.variacao} trendLabel="vs 24h anteriores" icon={Activity} variant="safe" carregando={kpis.isLoading} />
+        <KpiCard
+          label="Dirigindo agora"
+          value={k?.aoVivo.motoristasAtivos ?? "—"}
+          hint={k ? `de ${k.aoVivo.motoristasMonitorados} monitorados` : undefined}
+          icon={Users}
+          carregando={kpis.isLoading}
+          aoClicar={() => irPara("motoristas", { filtro: "ativos" })}
+          destino="Ver quem está dirigindo agora"
+        />
+        <KpiCard
+          label="Em risco agora"
+          value={k?.aoVivo.motoristasEmRisco ?? "—"}
+          hint={`${CRITERIO_EM_RISCO} na última leitura`}
+          icon={AlertTriangle}
+          variant="risk"
+          carregando={kpis.isLoading}
+          aoClicar={() => irPara("motoristas", { filtro: "risco" })}
+          destino="Ver os motoristas em risco agora"
+        />
+        <KpiCard
+          label="Fadiga média agora"
+          value={k ? num(k.aoVivo.fadigaMedia, 1) : "—"}
+          hint="motoristas dirigindo"
+          icon={Gauge}
+          variant="warning"
+          carregando={kpis.isLoading}
+          aoClicar={() => irPara("motoristas", { filtro: "ativos" })}
+          destino="Ver os motoristas dirigindo, do maior para o menor score"
+        />
+        <KpiCard
+          label="Alertas nas últimas 24h"
+          value={k?.alertas24h.total ?? "—"}
+          trend={k?.alertas24h.variacao}
+          trendLabel="vs 24h anteriores"
+          icon={Activity}
+          variant="safe"
+          carregando={kpis.isLoading}
+          aoClicar={() => {
+            escreverParametros({ horas: 24, gravidade: null }, { historico: true });
+            document.getElementById("alertas-recentes")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+          destino="Mostrar os alertas das últimas 24 horas"
+        />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -91,15 +142,40 @@ export default function Monitoramento() {
           }
         >
           <Conteudo q={tempoReal} altura={300}>
-            {(d) => <RealtimeAlerts motoristas={d.motoristas} aoSelecionar={setFocado} />}
+            {(d) => <RealtimeAlerts motoristas={d.motoristas} aoSelecionar={(id) => irPara("motoristas", { motorista: id, filtro: "todos" })} />}
           </Conteudo>
         </ChartCard>
 
-        <ChartCard title="Alertas recentes" subtitle="Últimas 6 horas • reconheça ou resolva" className="xl:col-span-2">
+        <ChartCard
+          title="Alertas recentes"
+          subtitle={`${rotuloJanela}${soGraves ? " • só graves" : ""} • reconheça ou resolva`}
+          className="xl:col-span-2 scroll-mt-24"
+          action={
+            <div id="alertas-recentes" className="flex items-center gap-1 text-xs">
+              {[6, 24, 720].map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => escreverParametros({ horas: h === 6 ? null : h }, { historico: true })}
+                  className={cn("px-2 py-1 rounded-md border", horas === h ? "bg-accent text-accent-foreground border-transparent" : "border-border text-muted-foreground hover:text-foreground")}
+                >
+                  {h === 720 ? "30 dias" : `${h} h`}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => escreverParametros({ gravidade: soGraves ? null : "graves" }, { historico: true })}
+                className={cn("px-2 py-1 rounded-md border inline-flex items-center gap-1", soGraves ? "bg-risk-high/10 text-risk-high border-risk-high/30" : "border-border text-muted-foreground hover:text-foreground")}
+              >
+                só graves {soGraves && <X className="h-3 w-3" />}
+              </button>
+            </div>
+          }
+        >
           <Conteudo q={tempoReal} altura={300}>
             {(d) =>
               d.eventos.length === 0 ? (
-                <Vazio>Nenhum alerta nas últimas 6 horas.</Vazio>
+                <Vazio>Nenhum alerta {soGraves ? "grave " : ""}na janela ({rotuloJanela.toLowerCase()}).</Vazio>
               ) : (
                 <div className="max-h-[420px] overflow-auto">
                   <table className="w-full text-sm">
@@ -115,13 +191,20 @@ export default function Monitoramento() {
                     </thead>
                     <tbody>
                       {d.eventos.map((e) => (
-                        <tr key={e.id} className={cn("border-t border-border/60", focado && e.codigo && d.motoristas.find((m) => m.motoristaId === focado)?.codigo === e.codigo && "bg-primary/5")}>
-                          <td className="py-2 pr-2 font-mono text-xs">{hora(e.disparadoEm)}</td>
+                        <tr key={e.id} className="border-t border-border">
+                          <td className="py-2 pr-2 font-mono text-xs whitespace-nowrap">{horas > 24 ? dataHora(e.disparadoEm) : hora(e.disparadoEm)}</td>
                           <td className="py-2 pr-2">
-                            <span className="font-medium">{e.nome}</span> <span className="text-xs text-muted-foreground font-mono">{e.codigo}</span>
+                            <button
+                              type="button"
+                              onClick={() => irPara("motoristas", { motorista: e.motoristaId, filtro: "todos" })}
+                              className="text-left hover:text-primary"
+                              title="Abrir o painel do motorista"
+                            >
+                              <span className="font-medium">{e.nome}</span> <span className="text-xs text-muted-foreground font-mono">{e.codigo}</span>
+                            </button>
                           </td>
                           <td className="py-2 pr-2">{e.rotulo}</td>
-                          <td className={cn("py-2 pr-2 capitalize font-medium", COR_GRAVIDADE[e.gravidade])}>{e.gravidade}</td>
+                          <td className={cn("py-2 pr-2 font-medium", COR_GRAVIDADE[e.gravidade])}>{ROTULO_GRAVIDADE[e.gravidade] ?? e.gravidade}</td>
                           <td className="py-2 pr-2 text-right">{num(e.score, 0)}</td>
                           <td className="py-2 text-right whitespace-nowrap">
                             {e.status === "aberto" ? (
@@ -217,7 +300,7 @@ export default function Monitoramento() {
                   <YAxis type="number" dataKey="fadiga" name="Score de fadiga" domain={[0, 100]} stroke={COR.eixo} fontSize={12} />
                   <ZAxis type="number" dataKey="eventos" range={[60, 400]} name="Alertas" />
                   <Tooltip
-                    cursor={{ strokeDasharray: "3 3", stroke: "oklch(0.5 0.02 255)" }}
+                    cursor={{ strokeDasharray: "3 3", stroke: COR.neutro }}
                     contentStyle={ESTILO_TOOLTIP}
                     formatter={(valor: number, nome: string) => (nome === "Horas de direção" ? [`${valor}h`, "Meio da faixa"] : nome === "Score de fadiga" ? [`${num(valor, 1)}/100`, nome] : [valor, nome])}
                   />

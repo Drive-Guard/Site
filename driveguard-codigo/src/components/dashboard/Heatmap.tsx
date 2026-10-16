@@ -11,13 +11,22 @@ import { api } from "@/lib/api";
 import { useFiltros } from "@/lib/filtros";
 import { diaMes, num } from "@/lib/formato";
 import type { Heatmap as TipoHeatmap } from "@/lib/tipos";
+import { ESCALA_RISCO } from "@/lib/risco";
 import { cn } from "@/lib/utils";
 
-function corPara(v: number) {
-  if (v < 25) return "oklch(0.75 0.18 150)";
-  if (v < 50) return "oklch(0.82 0.17 85)";
-  if (v < 75) return "oklch(0.7 0.2 45)";
-  return "oklch(0.6 0.24 20)";
+/**
+ * Cortes por medida: o score usa a escala de risco (40/70/90); o % de
+ * leituras sonolentas é bem menor (na operação fica em poucos %), então os
+ * cortes são 5/15/30% para a variação aparecer.
+ */
+const CORTES = { score: [40, 70, 90], probabilidade: [5, 15, 30] } as const;
+
+function corPara(v: number, medida: keyof typeof CORTES) {
+  const [a, b, c] = CORTES[medida];
+  if (v < a) return ESCALA_RISCO[0];
+  if (v < b) return ESCALA_RISCO[1];
+  if (v < c) return ESCALA_RISCO[2];
+  return ESCALA_RISCO[3];
 }
 
 const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -76,7 +85,7 @@ export function Heatmap() {
                           muitas ? "w-7 shrink-0" : "flex-1",
                           v === null ? "bg-secondary/30 text-muted-foreground" : "text-background/90",
                         )}
-                        style={v === null ? undefined : { background: corPara(v) }}
+                        style={v === null ? undefined : { background: corPara(v, medida) }}
                         title={
                           det
                             ? `${faixa} de direção • ${diaMes(dia)}: ${num(d.valores[i][j])}% sonolento, score médio ${num(det.fadiga, 1)}, ${det.alertas} alertas, ${det.leituras} leituras`
@@ -91,7 +100,7 @@ export function Heatmap() {
               ))}
               <div className="flex items-center gap-2 pt-3 text-[10px] text-muted-foreground">
                 <span>Baixo</span>
-                <div className="h-2 flex-1 rounded-full" style={{ background: "linear-gradient(to right, oklch(0.75 0.18 150), oklch(0.82 0.17 85), oklch(0.7 0.2 45), oklch(0.6 0.24 20))" }} />
+                <div className="h-2 flex-1 rounded-full" style={{ background: `linear-gradient(to right, ${ESCALA_RISCO.join(", ")})` }} />
                 <span>Crítico</span>
               </div>
             </div>

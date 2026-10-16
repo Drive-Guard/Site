@@ -9,6 +9,7 @@ import { Conteudo } from "@/components/comum/Estado";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { num, pct, reais } from "@/lib/formato";
+import { useIrPara } from "@/lib/navegacao";
 import type { Roi } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 
@@ -20,12 +21,12 @@ function valorParametro(valor: number | null, unidade: string) {
 }
 
 export function ImpactoRoi() {
+  const irPara = useIrPara();
   const q = useQuery({ queryKey: ["roi"], queryFn: () => api.get<Roi>("/dashboard/roi"), staleTime: 5 * 60_000 });
   const [cenario, setCenario] = useState<"conservador" | "realista">("conservador");
 
   return (
-    <div className="glass-card rounded-2xl p-6 relative overflow-hidden h-full">
-      <div className="absolute -bottom-16 -right-16 w-60 h-60 rounded-full bg-risk-low/15 blur-3xl" />
+    <div className="glass-card rounded-xl p-6 relative overflow-hidden h-full">
       <div className="relative">
         <div className="flex items-start justify-between gap-2">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Impacto estimado por ano</p>
@@ -72,9 +73,18 @@ export function ImpactoRoi() {
                   ))}
                 </div>
                 {roi.alertasAtendidos30d.percentual !== null && (
-                  <p className="mt-3 text-[11px] text-muted-foreground">
-                    Alertas graves com pausa ou troca registrada (30 dias): <span className="text-foreground font-medium">{pct(roi.alertasAtendidos30d.percentual)}</span>
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => irPara("monitoramento", { horas: 720, gravidade: "graves" })}
+                    title="Ver os alertas graves dos últimos 30 dias"
+                    className="clicavel mt-3 w-full text-left rounded-lg border border-border px-3 py-2 text-[11px] text-muted-foreground"
+                  >
+                    Alertas graves atendidos (30 dias):{" "}
+                    <span className="text-foreground font-semibold text-xs">{pct(roi.alertasAtendidos30d.percentual)}</span>
+                    <span className="block">
+                      {num(roi.alertasAtendidos30d.atendidos)} de {num(roi.alertasAtendidos30d.graves)} com pausa, contato, troca ou encerramento registrado
+                    </span>
+                  </button>
                 )}
                 <Fontes roi={roi} />
               </>

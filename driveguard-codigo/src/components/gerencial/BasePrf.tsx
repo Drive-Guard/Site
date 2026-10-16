@@ -37,7 +37,7 @@ export function BasePrf() {
 
   if (r && !r.carregada) {
     return (
-      <section className="glass-card rounded-2xl p-6">
+      <section className="glass-card rounded-xl p-6">
         <h3 className="text-base font-semibold">Base comparativa nacional (PRF)</h3>
         <Vazio>A base de acidentes da PRF ainda não foi carregada. Ela é baixada no deploy e atualizada toda semana.</Vazio>
       </section>
@@ -83,7 +83,7 @@ export function BasePrf() {
                   <XAxis dataKey="rotulo" stroke={COR.eixo} fontSize={10} interval={0} />
                   <YAxis stroke={COR.eixo} fontSize={12} />
                   <Tooltip
-                    cursor={{ fill: "oklch(0.3 0.025 255 / 0.3)" }}
+                    cursor={{ fill: COR.cursor }}
                     contentStyle={ESTILO_TOOLTIP}
                     formatter={(v: number, nome: string, item) => [`${num(v)} (${item.payload.percentualSono}% dos casos de sono)`, nome === "acidentesSono" ? "Por sono" : nome]}
                   />
@@ -106,7 +106,7 @@ export function BasePrf() {
                   <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
                   <XAxis type="number" stroke={COR.eixo} fontSize={11} />
                   <YAxis dataKey="causa" type="category" stroke={COR.eixo} fontSize={10} width={150} tickFormatter={(c: string) => (c.length > 26 ? `${c.slice(0, 25)}…` : c)} />
-                  <Tooltip cursor={{ fill: "oklch(0.3 0.025 255 / 0.3)" }} contentStyle={ESTILO_TOOLTIP} formatter={(v: number) => [num(v), "Acidentes"]} />
+                  <Tooltip cursor={{ fill: COR.cursor }} contentStyle={ESTILO_TOOLTIP} formatter={(v: number) => [num(v), "Acidentes"]} />
                   <Bar dataKey="acidentes" radius={[0, 6, 6, 0]}>
                     {d.causas.map((c) => (
                       <Cell key={c.causa} fill={c.ligadaASono ? COR.risco : c.causa === "Outras causas" ? COR.grade : COR.primaria} />

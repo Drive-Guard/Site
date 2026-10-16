@@ -1,19 +1,27 @@
 /**
  * Visão gerencial (admin e gestor): o resumo do período para quem decide.
+ *
+ * Cada número leva ao detalhe já filtrado (lib/navegacao.tsx), em vez de
+ * empilhar tudo aqui: em risco -> Motoristas (em risco), alertas 24h ->
+ * Monitoramento (24 h), horário crítico -> Relatórios (faixa do dia),
+ * acidentes -> Motoristas (com ocorrência), rota -> Motoristas da rota,
+ * código de motorista nos insights -> painel do motorista.
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock, Gauge, ShieldCheck, TrendingDown } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Gauge, ShieldAlert, ShieldCheck, TrendingDown } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { Filters } from "@/components/dashboard/Filters";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RiskRoutesList } from "@/components/dashboard/RiskRoutesList";
 import { Conteudo } from "@/components/comum/Estado";
+import { TextoComLinks } from "@/components/comum/TextoComLinks";
 import { api } from "@/lib/api";
 import { useFiltros } from "@/lib/filtros";
+import { faixaDaHora, useIrPara } from "@/lib/navegacao";
 import { diaMes, num, variacao } from "@/lib/formato";
-import { COR, ESTILO_TOOLTIP } from "@/lib/risco";
+import { COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP } from "@/lib/risco";
 import type { EvolucaoFadiga, Kpis, RotaDesempenho } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 import { BasePrf } from "./BasePrf";
@@ -31,8 +39,10 @@ export default function VisaoGerencial() {
   const evolucao = useQuery({ queryKey: ["evolucao", query], queryFn: () => api.get<EvolucaoFadiga>("/dashboard/evolucao-fadiga", query) });
   const rotas = useQuery({ queryKey: ["rotas", query], queryFn: () => api.get<RotaDesempenho[]>("/dashboard/rotas", query) });
   const insights = useInsights();
+  const irPara = useIrPara();
 
   const k = kpis.data;
+  const acidentes = k?.acidentesFrota;
   const criticos = insights.data?.recomendacoes.filter((r) => r.severidade === "critical" || r.severidade === "high").length ?? 0;
 
   return (
@@ -43,10 +53,12 @@ export default function VisaoGerencial() {
         <KpiCard
           label="Motoristas em risco agora"
           value={k?.aoVivo.motoristasEmRisco ?? "—"}
-          hint={k ? `de ${k.aoVivo.motoristasAtivos} dirigindo agora` : undefined}
+          hint={k ? `${CRITERIO_EM_RISCO} • de ${k.aoVivo.motoristasAtivos} dirigindo` : undefined}
           icon={AlertTriangle}
           variant="risk"
           carregando={kpis.isLoading}
+          aoClicar={() => irPara("motoristas", { filtro: "risco" })}
+          destino="Ver os motoristas em risco agora"
         />
         <KpiCard
           label="Fadiga média"
@@ -56,6 +68,8 @@ export default function VisaoGerencial() {
           icon={Gauge}
           variant="warning"
           carregando={kpis.isLoading}
+          aoClicar={() => irPara("motoristas", { filtro: "todos", ordem: "media" })}
+          destino="Ver os motoristas pela fadiga média de 30 dias"
         />
         <KpiCard
           label="Alertas nas últimas 24h"
@@ -66,6 +80,8 @@ export default function VisaoGerencial() {
           icon={ShieldCheck}
           variant="safe"
           carregando={kpis.isLoading}
+          aoClicar={() => irPara("monitoramento", { horas: 24 })}
+          destino="Ver os alertas das últimas 24 horas"
         />
         <KpiCard
           label="Horário crítico"
@@ -74,16 +90,50 @@ export default function VisaoGerencial() {
           icon={Clock}
           variant="risk"
           carregando={kpis.isLoading}
+          aoClicar={k?.horarioCritico ? () => irPara("relatorios", { faixa: faixaDaHora(k.horarioCritico?.inicio) }) : undefined}
+          destino="Abrir os relatórios filtrados por esta faixa do dia"
         />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 glass-card rounded-2xl p-6 relative overflow-hidden">
-          <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-primary/20 blur-3xl" />
+        <div className="lg:col-span-2 glass-card rounded-xl p-6 relative overflow-hidden">
           <div className="relative">
             {k && (
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-risk-high/10 border border-risk-high/30 text-risk-high text-xs font-medium mb-3">
-                <AlertTriangle className="h-3 w-3" /> {k.aoVivo.motoristasEmRisco} motoristas com fadiga alta neste momento
+              <div className="flex flex-wrap gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => irPara("motoristas", { filtro: "risco" })}
+                  className={cn(
+                    "clicavel inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium",
+                    k.aoVivo.motoristasEmRisco > 0 ? "bg-risk-high/10 border-risk-high/30 text-risk-high" : "bg-secondary border-border text-muted-foreground",
+                  )}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {k.aoVivo.motoristasEmRisco === 0
+                    ? "Nenhum motorista sonolento agora"
+                    : k.aoVivo.motoristasEmRisco === 1
+                      ? "1 motorista sonolento agora"
+                      : `${k.aoVivo.motoristasEmRisco} motoristas sonolentos agora`}
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+                {acidentes && (
+                  <button
+                    type="button"
+                    onClick={() => irPara("motoristas", { filtro: "ocorrencias" })}
+                    title="Ver os motoristas com acidente ou ocorrência no período"
+                    className={cn(
+                      "clicavel inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium",
+                      acidentes.porSono > 0 ? "bg-risk-critical/10 border-risk-critical/30 text-risk-critical" : "bg-secondary border-border text-muted-foreground",
+                    )}
+                  >
+                    <ShieldAlert className="h-3 w-3" />
+                    {acidentes.total === 0
+                      ? "Nenhum acidente da frota no período"
+                      : `${acidentes.total} ${acidentes.total === 1 ? "acidente" : "acidentes"} da frota no período${acidentes.porSono ? ` (${acidentes.porSono} por sono)` : ""}`}
+                    <span className="text-muted-foreground">• {acidentes.anterior} no anterior</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             )}
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
@@ -101,15 +151,19 @@ export default function VisaoGerencial() {
                       <span className={cn("font-semibold", k.periodo.variacaoFadiga <= 0 ? "text-risk-low" : "text-risk-high")}>{Math.abs(k.periodo.variacaoFadiga)}%</span> em relação ao período anterior.{" "}
                     </>
                   )}
-                  {criticos > 0 && (criticos === 1 ? "1 recomendação de prioridade alta aguarda ação." : `${criticos} recomendações de prioridade alta aguardam ação.`)}
+                  {criticos > 0 && (
+                    <a href="#insights" className="text-primary hover:underline">
+                      {criticos === 1 ? "1 recomendação de prioridade alta aguarda ação." : `${criticos} recomendações de prioridade alta aguardam ação.`}
+                    </a>
+                  )}
                 </>
               )}
             </p>
             {insights.data?.resumo?.length ? (
               <ul className="mt-4 grid md:grid-cols-2 gap-2 text-xs text-foreground/90">
                 {insights.data.resumo.slice(0, 4).map((f) => (
-                  <li key={f} className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
-                    {f}
+                  <li key={f} className="rounded-lg border border-border bg-secondary/50 px-3 py-2">
+                    <TextoComLinks texto={f} />
                   </li>
                 ))}
               </ul>
@@ -155,14 +209,14 @@ export default function VisaoGerencial() {
 
         <ChartCard title="Rotas com maior incidência" subtitle="Ordenadas pela fadiga média, com o histórico da PRF nas BRs">
           <Conteudo q={rotas} altura={300}>
-            {(d) => <RiskRoutesList rotas={d} />}
+            {(d) => <RiskRoutesList rotas={d} aoSelecionar={(r) => irPara("motoristas", { filtro: "todos", rota: `${r.origemCidade}|${r.destinoCidade}` })} />}
           </Conteudo>
         </ChartCard>
       </section>
 
       <BasePrf />
 
-      <section>
+      <section id="insights" className="scroll-mt-24">
         <Insights />
       </section>
 

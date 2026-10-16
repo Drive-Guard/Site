@@ -22,7 +22,7 @@ export function ParametrosRoi() {
   const restaurar = useSalvar((chave: string) => api.del(`/cadastros/parametros-roi/${chave}`), [["parametros-roi"], ["roi"]], "Valor padrão restaurado");
 
   return (
-    <div className="glass-card rounded-2xl p-5">
+    <div className="glass-card rounded-xl p-5">
       <div className="mb-3">
         <h3 className="text-base font-semibold">Parâmetros do ROI</h3>
         <p className="text-xs text-muted-foreground">
@@ -115,7 +115,7 @@ export function DadosEmpresa() {
   const q = useQuery({ queryKey: ["empresa"], queryFn: () => api.get<Empresa>("/cadastros/empresa") });
   const ufs = useQuery({ queryKey: ["ufs"], queryFn: () => api.get<Uf[]>("/cadastros/ufs"), staleTime: Infinity });
   return (
-    <div className="glass-card rounded-2xl p-5 max-w-2xl">
+    <div className="glass-card rounded-xl p-5 max-w-2xl">
       <h3 className="text-base font-semibold mb-1">Empresa</h3>
       <p className="text-xs text-muted-foreground mb-4">O tamanho total da frota define a cobertura das câmeras no ROI.</p>
       <Conteudo q={q} altura={200}>

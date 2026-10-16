@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Eye, KeyRound, Loader2, LogIn, ShieldCheck, Truck, UserCog } from "lucide-react";
 import { type DesafioNovaSenha, type Papel, useAuth } from "@/lib/auth";
 import { config } from "@/lib/config";
+import { SeletorTema } from "@/lib/tema";
 
 const campo =
   "w-full bg-secondary/60 border border-border text-sm rounded-lg px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50";
@@ -9,12 +10,12 @@ const campo =
 function Marca() {
   return (
     <div className="flex items-center gap-3 mb-8">
-      <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-[oklch(0.6_0.22_280)] flex items-center justify-center glow-primary">
+      <div className="h-11 w-11 rounded-xl bg-primary flex items-center justify-center">
         <Eye className="h-5 w-5 text-primary-foreground" />
       </div>
       <div>
         <h1 className="text-xl font-bold tracking-tight">
-          Drive<span className="text-gradient">Guard</span>
+          Drive<span className="text-primary">Guard</span>
         </h1>
         <p className="text-xs text-muted-foreground">Detecção de fadiga & prevenção de acidentes</p>
       </div>
@@ -25,8 +26,9 @@ function Marca() {
 export function Login() {
   const { desenvolvimento } = useAuth();
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm glass-card rounded-2xl p-8">
+    <div className="min-h-screen flex items-center justify-center px-4 relative">
+      <SeletorTema className="absolute top-4 right-4" />
+      <div className="w-full max-w-sm glass-card rounded-xl p-8">
         <Marca />
         {desenvolvimento ? <LoginDev /> : <LoginCognito />}
         <p className="mt-8 text-[11px] text-muted-foreground">Ambiente: {config().ambiente}</p>

@@ -11,7 +11,7 @@ interface ChartCardProps {
 
 export function ChartCard({ title, subtitle, action, children, className }: ChartCardProps) {
   return (
-    <div className={cn("glass-card rounded-2xl p-5 flex flex-col h-full", className)}>
+    <div className={cn("glass-card rounded-xl p-5 flex flex-col h-full", className)}>
       <div className="flex items-start justify-between mb-4 shrink-0">
         <div>
           <h3 className="text-base font-semibold text-foreground">{title}</h3>

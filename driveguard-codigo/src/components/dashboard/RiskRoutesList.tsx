@@ -5,7 +5,7 @@ import { CHIP_RISCO, PONTO_RISCO, ROTULO_RISCO } from "@/lib/risco";
 import type { RotaDesempenho } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 
-export function RiskRoutesList({ rotas }: { rotas: RotaDesempenho[] }) {
+export function RiskRoutesList({ rotas, aoSelecionar }: { rotas: RotaDesempenho[]; aoSelecionar?: (r: RotaDesempenho) => void }) {
   if (rotas.length === 0) {
     return <Vazio>Nenhuma viagem casada com rota no período. Cadastre rotas e viagens em Cadastros.</Vazio>;
   }
@@ -14,7 +14,15 @@ export function RiskRoutesList({ rotas }: { rotas: RotaDesempenho[] }) {
       {rotas.map((r) => {
         const subiu = (r.tendencia ?? 0) >= 0;
         return (
-          <li key={r.rotaId} className="rounded-xl border border-border p-3 hover:bg-secondary/40 transition">
+          <li
+            key={r.rotaId}
+            onClick={aoSelecionar ? () => aoSelecionar(r) : undefined}
+            onKeyDown={aoSelecionar ? (e) => e.key === "Enter" && aoSelecionar(r) : undefined}
+            tabIndex={aoSelecionar ? 0 : undefined}
+            role={aoSelecionar ? "button" : undefined}
+            title={aoSelecionar ? "Ver os motoristas desta rota" : undefined}
+            className={cn("rounded-lg border border-border p-3 hover:bg-secondary/60 transition", aoSelecionar && "clicavel")}
+          >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className={cn("h-2 w-2 rounded-full shrink-0", PONTO_RISCO[r.risco])} />

@@ -1,9 +1,19 @@
-/** Escala de risco (mesma da API e das views Gold) e suas cores. */
+/**
+ * Escala de risco (mesma da API e das views Gold) e suas cores.
+ *
+ * Segue os estados do modelo: baixo < 40 (alerta), médio 40-70 (fadiga),
+ * alto 70-90 (sonolento) e crítico >= 90. "Em risco" = sonolento (>= 70).
+ */
 
 export type NivelRisco = "low" | "medium" | "high" | "critical" | "sem_dados";
 
+export const LIMITE_EM_RISCO = 70;
+
 export const riscoDoScore = (s: number | null | undefined): NivelRisco =>
-  s === null || s === undefined ? "sem_dados" : s < 35 ? "low" : s < 60 ? "medium" : s < 80 ? "high" : "critical";
+  s === null || s === undefined ? "sem_dados" : s < 40 ? "low" : s < LIMITE_EM_RISCO ? "medium" : s < 90 ? "high" : "critical";
+
+/** Texto curto do critério, para as dicas dos indicadores. */
+export const CRITERIO_EM_RISCO = `sonolento (score ≥ ${LIMITE_EM_RISCO})`;
 
 export const ROTULO_RISCO: Record<NivelRisco, string> = { low: "baixo", medium: "médio", high: "alto", critical: "crítico", sem_dados: "sem dados" };
 
@@ -34,21 +44,32 @@ export const PONTO_RISCO: Record<NivelRisco, string> = {
 /** Severidade dos insights (baixa..crítica) já vem convertida para a escala acima. */
 export const ROTULO_SEVERIDADE: Record<string, string> = { low: "baixo", medium: "médio", high: "alto", critical: "crítico" };
 
+// Cores dos gráficos: variáveis CSS do tema (styles.css), então os gráficos
+// acompanham o modo claro/escuro sem recarregar.
 export const ESTILO_TOOLTIP = {
-  background: "oklch(0.21 0.025 255)",
-  border: "1px solid oklch(0.3 0.025 255)",
-  borderRadius: 12,
-  color: "oklch(0.97 0.01 250)",
+  background: "var(--color-popover)",
+  border: "1px solid var(--color-border)",
+  borderRadius: 10,
+  color: "var(--color-popover-foreground)",
   fontSize: 12,
+  boxShadow: "var(--shadow-card)",
 };
 
 export const COR = {
-  grade: "oklch(0.3 0.025 255)",
-  eixo: "oklch(0.7 0.02 255)",
-  primaria: "oklch(0.72 0.18 220)",
-  risco: "oklch(0.65 0.22 25)",
-  roxo: "oklch(0.6 0.22 280)",
-  amarelo: "oklch(0.82 0.17 85)",
-  verde: "oklch(0.75 0.18 150)",
-  ciano: "oklch(0.6 0.118 184)",
+  grade: "var(--chart-grid)",
+  eixo: "var(--chart-axis)",
+  neutro: "var(--chart-muted)",
+  cursor: "var(--chart-cursor)",
+  primaria: "var(--chart-1)",
+  secundaria: "var(--chart-2)",
+  risco: "var(--color-risk-high)",
+  critico: "var(--color-risk-critical)",
+  amarelo: "var(--color-risk-medium)",
+  verde: "var(--color-risk-low)",
+  // Nomes antigos, mantidos para os gráficos existentes.
+  roxo: "var(--chart-2)",
+  ciano: "var(--chart-1)",
 };
+
+/** Escala contínua baixo -> crítico (heatmap). */
+export const ESCALA_RISCO = ["var(--color-risk-low)", "var(--color-risk-medium)", "var(--color-risk-high)", "var(--color-risk-critical)"];

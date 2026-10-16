@@ -19,12 +19,14 @@ import {
   Gauge,
   Loader2,
   Phone,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   TrendingDown,
   TrendingUp,
   Truck,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,8 +35,9 @@ import { Conteudo, Vazio } from "@/components/comum/Estado";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, mensagemDeErro } from "@/lib/api";
 import { useFiltros } from "@/lib/filtros";
+import { escreverParametros, useParametros } from "@/lib/navegacao";
 import { dataHora, num, relativo } from "@/lib/formato";
-import { ANEL_RISCO, CHIP_RISCO, COR, ESTILO_TOOLTIP, PONTO_RISCO, ROTULO_RISCO } from "@/lib/risco";
+import { ANEL_RISCO, CHIP_RISCO, COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP, PONTO_RISCO, ROTULO_RISCO } from "@/lib/risco";
 import type { CurvaTurno, InsightMotorista, MotoristaAoVivo, MotoristaDetalhe } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 import { ChartCard } from "./ChartCard";
@@ -59,22 +62,57 @@ const ESTILO_INSIGHT: Record<string, { ring: string; chip: string; icon: string 
   critical: { ring: "border-risk-critical/50 bg-risk-critical/10", chip: "bg-risk-critical/20 text-risk-critical", icon: "text-risk-critical" },
 };
 
+type FiltroLista = "ativos" | "risco" | "alertas" | "ocorrencias" | "todos";
+
+const FILTROS: { id: FiltroLista; rotulo: string; teste: (m: MotoristaAoVivo) => boolean }[] = [
+  { id: "ativos", rotulo: "Ao vivo", teste: (m) => m.ativo },
+  { id: "risco", rotulo: "Em risco", teste: (m) => m.ativo && (m.risco === "high" || m.risco === "critical") },
+  { id: "alertas", rotulo: "Com alertas hoje", teste: (m) => m.alertasHoje > 0 },
+  { id: "ocorrencias", rotulo: "Com ocorrência", teste: (m) => m.ocorrencias > 0 },
+  { id: "todos", rotulo: "Todos", teste: () => true },
+];
+
+/** Mesmas cidades nos dois sentidos (ida e volta são a mesma rota). */
+function mesmaRota(rotaMotorista: string | null, filtro: string) {
+  if (!rotaMotorista) return false;
+  const a = rotaMotorista.split("→").map((c) => c.trim().toLowerCase()).sort().join("|");
+  const b = filtro.split("|").map((c) => c.trim().toLowerCase()).sort().join("|");
+  return a === b;
+}
+
+/**
+ * Filtro, ordem, rota e motorista selecionado vêm da URL (lib/navegacao.tsx):
+ * as outras telas abrem esta já filtrada, e o voltar do navegador funciona.
+ */
 export default function DriversMonitor() {
-  const { query } = useFiltros();
-  const [selecionado, setSelecionado] = useState<string | null>(null);
-  const [somenteAtivos, setSomenteAtivos] = useState(true);
+  const { query, rotuloPeriodo } = useFiltros();
+  const url = useParametros();
+  const filtro = (FILTROS.find((f) => f.id === url.get("filtro"))?.id ?? "ativos") as FiltroLista;
+  const ordemMedia = url.get("ordem") === "media";
+  const rota = url.get("rota");
+  const codigo = url.get("codigo");
 
   const lista = useQuery({ queryKey: ["motoristas-ao-vivo", query], queryFn: () => api.get<MotoristaAoVivo[]>("/motoristas/ao-vivo", query), refetchInterval: 30_000 });
-  const visiveis = useMemo(() => (lista.data ?? []).filter((m) => !somenteAtivos || m.ativo), [lista.data, somenteAtivos]);
-  const ativos = (lista.data ?? []).filter((m) => m.ativo);
+  const todos = lista.data ?? [];
+  // ?codigo=DRV-1013 (links dos insights) vira o id do motorista.
+  const selecionado = url.get("motorista") ?? (codigo ? todos.find((m) => m.codigo === codigo)?.motoristaId ?? null : null);
+  const selecionar = (id: string | null) => escreverParametros({ motorista: id, codigo: null }, { historico: true });
+
+  const visiveis = useMemo(() => {
+    const teste = FILTROS.find((f) => f.id === filtro)!.teste;
+    const base = todos.filter((m) => teste(m) && (!rota || mesmaRota(m.rota, rota)));
+    return ordemMedia ? [...base].sort((a, b) => (b.scoreMedio30d ?? -1) - (a.scoreMedio30d ?? -1)) : base;
+  }, [todos, filtro, rota, ordemMedia]);
+  const ativos = todos.filter((m) => m.ativo);
   const emRisco = ativos.filter((m) => m.risco === "high" || m.risco === "critical").length;
+  const rotuloRota = rota?.split("|").join(" ↔ ");
 
   return (
     <>
       <Filters exportar={false} />
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
         <aside className="lg:col-span-3">
-          <div className="glass-card rounded-2xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
+          <div className="glass-card rounded-xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-base font-semibold flex items-center gap-2">
@@ -84,16 +122,47 @@ export default function DriversMonitor() {
                   {ativos.length} dirigindo agora • {emRisco} em risco
                 </p>
               </div>
-              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
-                <input type="checkbox" checked={somenteAtivos} onChange={(e) => setSomenteAtivos(e.target.checked)} className="accent-[oklch(0.72_0.18_220)]" />
-                só ao vivo
-              </label>
             </div>
+            <div className="flex flex-wrap gap-1.5 mb-3" role="tablist" aria-label="Filtrar motoristas">
+              {FILTROS.map((f) => {
+                const qtd = todos.filter(f.teste).length;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={filtro === f.id}
+                    onClick={() => escreverParametros({ filtro: f.id === "ativos" ? null : f.id }, { historico: true })}
+                    className={cn(
+                      "text-[11px] px-2 py-1 rounded-md border transition",
+                      filtro === f.id ? "bg-accent text-accent-foreground border-transparent font-medium" : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {f.rotulo} <span className="tabular-nums opacity-70">{qtd}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {(rota || ordemMedia || filtro === "ocorrencias") && (
+              <div className="flex flex-wrap gap-1.5 mb-3 text-[11px]">
+                {rota && (
+                  <button type="button" onClick={() => escreverParametros({ rota: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
+                    Rota {rotuloRota} <X className="h-3 w-3" />
+                  </button>
+                )}
+                {ordemMedia && (
+                  <button type="button" onClick={() => escreverParametros({ ordem: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
+                    Ordem: fadiga média 30 dias <X className="h-3 w-3" />
+                  </button>
+                )}
+                {filtro === "ocorrencias" && <span className="px-2 py-1 text-muted-foreground">ocorrências {rotuloPeriodo.toLowerCase()}</span>}
+              </div>
+            )}
             <div className="space-y-2 overflow-auto pr-1 flex-1 min-h-0">
               <Conteudo q={lista} altura={400}>
                 {() =>
                   visiveis.length === 0 ? (
-                    <Vazio>Nenhum motorista dirigindo agora. Desmarque "só ao vivo" para ver todos.</Vazio>
+                    <Vazio>Nenhum motorista neste filtro. Escolha "Todos" para ver a frota inteira.</Vazio>
                   ) : (
                     <>
                       {visiveis.map((d) => {
@@ -101,8 +170,8 @@ export default function DriversMonitor() {
                         return (
                           <button
                             key={d.motoristaId}
-                            onClick={() => setSelecionado(ativo ? null : d.motoristaId)}
-                            className={cn("w-full text-left rounded-xl border p-3 transition-all", ANEL_RISCO[d.ativo ? d.risco : "sem_dados"], ativo && "ring-2 ring-primary/60", d.risco === "critical" && d.ativo && "glow-primary")}
+                            onClick={() => selecionar(ativo ? null : d.motoristaId)}
+                            className={cn("w-full text-left rounded-lg border p-3 transition-all", ANEL_RISCO[d.ativo ? d.risco : "sem_dados"], ativo && "ring-2 ring-primary/60")}
                           >
                             <div className="flex items-center gap-2.5">
                               <span className={cn("h-2.5 w-2.5 rounded-full", d.ativo && "pulse-dot", PONTO_RISCO[d.ativo ? d.risco : "sem_dados"])} />
@@ -119,7 +188,13 @@ export default function DriversMonitor() {
                                   <span>{d.regiao}</span>
                                   <span>•</span>
                                   <span className="flex items-center gap-1">{d.ativo ? <><Clock className="h-3 w-3" /> {num(d.horasTurno, 1)}h</> : relativo(d.ultimaLeituraEm)}</span>
+                                  {d.ocorrencias > 0 && (
+                                    <span className={cn("flex items-center gap-0.5 font-medium", d.ocorrenciasSono ? "text-risk-critical" : "text-muted-foreground")} title="Ocorrências no período">
+                                      <ShieldAlert className="h-3 w-3" /> {d.ocorrencias}
+                                    </span>
+                                  )}
                                 </div>
+                                {ordemMedia && <p className="mt-0.5 text-[11px] text-muted-foreground">média 30 dias: <span className="font-medium text-foreground">{num(d.scoreMedio30d, 1)}</span></p>}
                               </div>
                               <div className="text-right">
                                 <div className="flex items-center gap-1 justify-end">
@@ -142,20 +217,20 @@ export default function DriversMonitor() {
           </div>
         </aside>
 
-        <section className="lg:col-span-7 space-y-6">{selecionado ? <PainelMotorista id={selecionado} aoLimpar={() => setSelecionado(null)} /> : <PainelFrota lista={ativos} />}</section>
+        <section className="lg:col-span-7 space-y-6">{selecionado ? <PainelMotorista id={selecionado} aoLimpar={() => selecionar(null)} /> : <PainelFrota lista={ativos} aoSelecionar={selecionar} />}</section>
       </div>
     </>
   );
 }
 
-function PainelFrota({ lista }: { lista: MotoristaAoVivo[] }) {
+function PainelFrota({ lista, aoSelecionar }: { lista: MotoristaAoVivo[]; aoSelecionar: (id: string) => void }) {
   const media = lista.length ? lista.reduce((a, d) => a + d.score, 0) / lista.length : null;
   const horas = lista.length ? lista.reduce((a, d) => a + (d.horasTurno ?? 0), 0) / lista.length : null;
   const alertas = lista.reduce((a, d) => a + d.alertasHoje, 0);
   const criticos = lista.filter((d) => d.risco === "critical" || d.risco === "high");
   return (
     <>
-      <div className="glass-card rounded-2xl p-4">
+      <div className="glass-card rounded-xl p-4">
         <p className="text-xs uppercase tracking-wider text-muted-foreground">Visão da frota</p>
         <h2 className="text-xl font-bold">Todos os motoristas</h2>
         <p className="text-xs text-muted-foreground">{lista.length} dirigindo agora. Selecione um motorista para ver o turno, os insights e registrar ações.</p>
@@ -164,7 +239,7 @@ function PainelFrota({ lista }: { lista: MotoristaAoVivo[] }) {
         <KpiCard label="Score médio" value={num(media, 0)} hint="motoristas dirigindo" icon={Gauge} variant={(media ?? 0) >= 70 ? "risk" : (media ?? 0) >= 50 ? "warning" : "safe"} />
         <KpiCard label="Tempo médio de turno" value={horas === null ? "—" : `${num(horas, 1)}h`} hint="turnos em andamento" icon={Clock} variant={(horas ?? 0) >= 8 ? "risk" : "default"} />
         <KpiCard label="Alertas hoje" value={alertas} hint="motoristas dirigindo" icon={AlertTriangle} variant="warning" />
-        <KpiCard label="Em risco" value={criticos.length} hint="score ≥ 60" icon={Zap} variant="risk" />
+        <KpiCard label="Em risco" value={criticos.length} hint={CRITERIO_EM_RISCO} icon={Zap} variant="risk" />
       </div>
       <ChartCard title="Quem precisa de atenção" subtitle="Motoristas com score alto ou turno longo">
         {criticos.length === 0 && lista.every((d) => (d.horasTurno ?? 0) < 6) ? (
@@ -175,7 +250,15 @@ function PainelFrota({ lista }: { lista: MotoristaAoVivo[] }) {
               .filter((d) => d.risco === "critical" || d.risco === "high" || (d.horasTurno ?? 0) >= 6)
               .sort((a, b) => b.score - a.score)
               .map((d) => (
-                <li key={d.motoristaId} className={cn("rounded-xl border p-3 text-sm", CHIP_RISCO[d.risco])}>
+                <li
+                  key={d.motoristaId}
+                  onClick={() => aoSelecionar(d.motoristaId)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && aoSelecionar(d.motoristaId)}
+                  title="Abrir o painel do motorista"
+                  className={cn("clicavel rounded-lg border p-3 text-sm", CHIP_RISCO[d.risco])}
+                >
                   <span className="font-medium text-foreground">{d.nome}</span> <span className="font-mono text-xs">{d.codigo}</span>
                   <p className="text-xs text-muted-foreground">
                     score {num(d.score, 0)} • {num(d.horasTurno, 1)}h de turno • {d.alertasHoje} alertas hoje
@@ -197,7 +280,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
 
   return (
     <>
-      <div className="glass-card rounded-2xl p-4 flex items-center justify-between">
+      <div className="glass-card rounded-xl p-4 flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Motorista selecionado</p>
           <h2 className="text-xl font-bold">{d?.nome ?? "…"}</h2>
@@ -272,7 +355,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
                     <Tooltip contentStyle={ESTILO_TOOLTIP} formatter={(v: number, n: string) => [num(v, 1), n === "fadiga" ? "Motorista" : n === "mediaFrota" ? "Média da frota" : "Máximo"]} />
                     <ReferenceLine y={c.limiteAlerta} stroke={COR.risco} strokeDasharray="4 4" label={{ value: "Limite de alerta", fill: COR.risco, fontSize: 11, position: "right" }} />
                     <Area type="monotone" dataKey="fadiga" stroke={COR.primaria} strokeWidth={2.5} fill="url(#drvFad)" connectNulls />
-                    <Line type="monotone" dataKey="mediaFrota" stroke="oklch(0.85 0.02 255)" strokeWidth={1.5} strokeDasharray="5 5" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="mediaFrota" stroke={COR.neutro} strokeWidth={1.5} strokeDasharray="5 5" dot={false} connectNulls />
                   </AreaChart>
                 </ResponsiveContainer>
               )

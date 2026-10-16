@@ -14,6 +14,8 @@ export interface Me {
 export interface Kpis {
   aoVivo: { motoristasAtivos: number; motoristasEmRisco: number; motoristasMonitorados: number; fadigaMedia: number | null };
   alertas24h: { total: number; anterior: number; variacao: number | null };
+  /** Acidentes da própria frota (não os da PRF) no período e no anterior. */
+  acidentesFrota: { total: number; porSono: number; anterior: number };
   horarioCritico: {
     inicio: string;
     fim: string;
@@ -68,11 +70,14 @@ export interface EventoAlerta {
   score: number | null;
   codigo: string | null;
   nome: string;
+  motoristaId: string;
 }
 
 export interface TempoReal {
   motoristas: MotoristaTempoReal[];
   eventos: EventoAlerta[];
+  /** Janela dos alertas: 6 h por padrão; os atalhos pedem 24 h ou 30 dias. */
+  janela: { horas: number; graves: boolean };
 }
 
 export interface TendenciaTurno {
@@ -245,6 +250,11 @@ export interface MotoristaAoVivo {
   ultimaLeituraEm: string;
   ativo: boolean;
   scoreMedio30d: number | null;
+  /** Acidentes/ocorrências da frota no período (base do filtro "com ocorrências"). */
+  ocorrencias: number;
+  ocorrenciasSono: number;
+  /** Rota do turno mais recente ("Origem → Destino"). */
+  rota: string | null;
 }
 
 export interface MotoristaDetalhe {
@@ -337,7 +347,9 @@ export interface ResumoRelatorio {
     eventosAnterior: number;
     variacaoEventos: number | null;
     alertasGraves: number;
+    /** Graves atendidos (pausa, contato, troca ou encerramento). */
     alertasAtendidos: number;
+    percentualAtendidos: number | null;
     motoristasAnalisados: number;
     veiculosAnalisados: number;
     turnos: number;

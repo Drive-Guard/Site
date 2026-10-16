@@ -19,7 +19,7 @@ export function Rotas() {
   const ufs = useQuery({ queryKey: ["ufs"], queryFn: () => api.get<Uf[]>("/cadastros/ufs"), staleTime: Infinity });
   const [editar, setEditar] = useState<RotaCadastro | "nova" | null>(null);
   return (
-    <div className="glass-card rounded-2xl p-5">
+    <div className="glass-card rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-base font-semibold">Rotas</h3>
@@ -165,7 +165,7 @@ export function Viagens() {
   );
 
   return (
-    <div className="glass-card rounded-2xl p-5">
+    <div className="glass-card rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-base font-semibold">Viagens (últimos 60 dias e futuras)</h3>

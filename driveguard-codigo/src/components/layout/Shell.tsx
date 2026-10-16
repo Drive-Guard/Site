@@ -6,15 +6,18 @@
  *     rotas, base comparativa da PRF, insights;
  *   - Monitoramento (todos): tempo real, alertas, tendência no turno,
  *     heatmap e fadiga x tempo de direção.
- * A aba fica na URL (?aba=...), para links como o do e-mail de relatório.
+ * A aba e os filtros ficam na URL (?aba=...), para os atalhos entre telas,
+ * o voltar do navegador e links como o do e-mail de relatório.
  */
 
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Eye, LogOut } from "lucide-react";
 import { Carregando } from "@/components/comum/Estado";
 import { api } from "@/lib/api";
 import { type Papel, ROTULO_PAPEL, useAuth } from "@/lib/auth";
+import { escreverParametros, useIrPara, useParametro } from "@/lib/navegacao";
+import { SeletorTema } from "@/lib/tema";
 import type { Me } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 
@@ -41,25 +44,19 @@ const ABAS: Aba[] = [
   { id: "usuarios", titulo: "Usuários", papeis: ["admin"], componente: Usuarios },
 ];
 
-function abaDaUrl(): string | null {
-  return new URLSearchParams(window.location.search).get("aba");
-}
-
 export function Shell() {
   const { usuario, sair, pode } = useAuth();
   const abas = useMemo(() => ABAS.filter((a) => pode(...a.papeis)), [pode]);
-  const [ativa, setAtiva] = useState(() => {
-    const daUrl = abaDaUrl();
-    return abas.find((a) => a.id === daUrl)?.id ?? abas[0]?.id;
-  });
+  const daUrl = useParametro("aba");
+  const ativa = abas.find((a) => a.id === daUrl)?.id ?? abas[0]?.id;
+  const irPara = useIrPara();
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => api.get<Me>("/me"), staleTime: 5 * 60_000 });
 
+  // Sem aba na URL (ou aba sem permissão): grava a padrão sem criar histórico.
   useEffect(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("aba", ativa);
-    window.history.replaceState(null, "", url);
-  }, [ativa]);
+    if (ativa && daUrl !== ativa) escreverParametros({ aba: ativa });
+  }, [ativa, daUrl]);
 
   const Atual = abas.find((a) => a.id === ativa)?.componente;
   const iniciais = (usuario?.nome ?? "?")
@@ -70,15 +67,15 @@ export function Shell() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border/60 backdrop-blur-md sticky top-0 z-30 bg-background/70">
+      <header className="border-b border-border backdrop-blur-md sticky top-0 z-30 bg-background/85">
         <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 shrink-0">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-[oklch(0.6_0.22_280)] flex items-center justify-center glow-primary">
+            <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
               <Eye className="h-5 w-5 text-primary-foreground" />
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-lg font-bold tracking-tight">
-                Drive<span className="text-gradient">Guard</span>
+              <h1 className="text-lg font-semibold tracking-tight">
+                Drive<span className="text-primary">Guard</span>
               </h1>
               <p className="text-xs text-muted-foreground">{me.data?.empresa.nome ?? "Detecção de fadiga & prevenção de acidentes"}</p>
             </div>
@@ -88,10 +85,11 @@ export function Shell() {
             {abas.map((a) => (
               <button
                 key={a.id}
-                onClick={() => setAtiva(a.id)}
+                onClick={() => irPara(a.id)}
+                aria-current={ativa === a.id ? "page" : undefined}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg transition whitespace-nowrap",
-                  ativa === a.id ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary/60",
+                  "px-3 py-1.5 rounded-md transition whitespace-nowrap font-medium",
+                  ativa === a.id ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary",
                 )}
               >
                 {a.titulo}
@@ -100,11 +98,12 @@ export function Shell() {
           </nav>
 
           <div className="flex items-center gap-3 shrink-0">
+            <SeletorTema className="hidden sm:inline-flex" />
             <div className="text-right hidden md:block">
               <p className="text-sm font-medium leading-tight">{usuario?.nome}</p>
               <p className="text-xs text-muted-foreground">{usuario ? ROTULO_PAPEL[usuario.papel] : ""}</p>
             </div>
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-[oklch(0.6_0.22_280)] flex items-center justify-center text-sm font-bold text-primary-foreground">
+            <div className="h-9 w-9 rounded-full bg-accent border border-border flex items-center justify-center text-sm font-semibold text-accent-foreground">
               {iniciais}
             </div>
             <button onClick={sair} title="Sair" className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60">

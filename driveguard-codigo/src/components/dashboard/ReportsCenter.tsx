@@ -36,6 +36,8 @@ import { Conteudo, Vazio } from "@/components/comum/Estado";
 import { SeletorIntervalo } from "@/components/comum/SeletorIntervalo";
 import { abrirDownload, api, mensagemDeErro, type Query } from "@/lib/api";
 import { dataHora, num, reais } from "@/lib/formato";
+import { useFiltros } from "@/lib/filtros";
+import { useParametros } from "@/lib/navegacao";
 import { COR, ESTILO_TOOLTIP } from "@/lib/risco";
 import type { Agendamento, RelatorioGerado, ResumoRelatorio, VeiculoCadastro } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
@@ -53,16 +55,16 @@ function Campo({ icone: Icone, children }: { icone: React.ElementType; children:
 }
 
 const TIPOS = [
-  { tipo: "executivo", titulo: "Relatório Executivo", desc: "Resumo para gestores, com ROI e base da PRF.", icone: FileText, formato: "pdf", acento: "from-primary/30 to-primary/5 text-primary" },
-  { tipo: "operacional", titulo: "Relatório Operacional", desc: "Dia a dia, turnos e alertas por tipo.", icone: FileSpreadsheet, formato: "xlsx", acento: "from-risk-low/30 to-risk-low/5 text-risk-low" },
-  { tipo: "motoristas", titulo: "Relatório de Motoristas", desc: "Indicadores individuais (30 dias).", icone: Users, formato: "pdf", acento: "from-risk-medium/30 to-risk-medium/5 text-risk-medium" },
-  { tipo: "frota", titulo: "Relatório da Frota", desc: "Veículos, câmeras e cobertura.", icone: Truck, formato: "pdf", acento: "from-primary/30 to-primary/5 text-primary" },
-  { tipo: "alertas", titulo: "Histórico de Alertas", desc: "Todos os alertas do período.", icone: Activity, formato: "csv", acento: "from-risk-high/30 to-risk-high/5 text-risk-high" },
+  { tipo: "executivo", titulo: "Relatório Executivo", desc: "Resumo para gestores, com ROI e base da PRF.", icone: FileText, formato: "pdf", acento: "bg-accent text-accent-foreground" },
+  { tipo: "operacional", titulo: "Relatório Operacional", desc: "Dia a dia, turnos e alertas por tipo.", icone: FileSpreadsheet, formato: "xlsx", acento: "bg-risk-low/12 text-risk-low" },
+  { tipo: "motoristas", titulo: "Relatório de Motoristas", desc: "Indicadores individuais (30 dias).", icone: Users, formato: "pdf", acento: "bg-risk-medium/15 text-risk-medium" },
+  { tipo: "frota", titulo: "Relatório da Frota", desc: "Veículos, câmeras e cobertura.", icone: Truck, formato: "pdf", acento: "bg-accent text-accent-foreground" },
+  { tipo: "alertas", titulo: "Histórico de Alertas", desc: "Todos os alertas do período.", icone: Activity, formato: "csv", acento: "bg-risk-high/12 text-risk-high" },
 ] as const;
 
 const ROTULO_FORMATO: Record<string, string> = { pdf: "PDF", xlsx: "Excel", csv: "CSV" };
 const ROTULO_TIPO: Record<string, string> = Object.fromEntries(TIPOS.map((t) => [t.tipo, t.titulo]));
-const CORES_BARRAS = [COR.risco, "oklch(0.72 0.18 40)", COR.primaria, COR.amarelo, COR.ciano, COR.roxo, COR.verde, COR.eixo];
+const CORES_BARRAS = [COR.primaria, COR.risco, COR.secundaria, COR.amarelo, COR.critico, COR.verde, COR.neutro, COR.eixo];
 const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
 interface FiltrosRelatorio {
@@ -83,7 +85,19 @@ function paraQuery(f: FiltrosRelatorio): Query {
 }
 
 export default function ReportsCenter() {
-  const [f, setF] = useState<FiltrosRelatorio>({ periodo: "30d", regiao: "", risco: "", veiculo_id: "", tipo_veiculo: "", faixa_horaria: "" });
+  // Abre com os filtros da dashboard e os do atalho (?faixa=madrugada, ?risco=high).
+  const { filtros: globais } = useFiltros();
+  const url = useParametros();
+  const [f, setF] = useState<FiltrosRelatorio>(() => ({
+    periodo: globais.periodo,
+    de: globais.de,
+    ate: globais.ate,
+    regiao: globais.regiao,
+    risco: url.get("risco") ?? "",
+    veiculo_id: "",
+    tipo_veiculo: globais.tipoVeiculo,
+    faixa_horaria: url.get("faixa") ?? "",
+  }));
   const definir = (p: Partial<FiltrosRelatorio>) => setF((x) => ({ ...x, ...p }));
   const query = useMemo(() => paraQuery(f), [f]);
   const cliente = useQueryClient();
@@ -119,7 +133,7 @@ export default function ReportsCenter() {
 
   return (
     <div className="space-y-6">
-      <div className="glass-card rounded-2xl p-4">
+      <div className="glass-card rounded-xl p-4">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-primary" />
@@ -192,7 +206,7 @@ export default function ReportsCenter() {
       </div>
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Alertas registrados" value={r ? num(r.kpis.eventos) : "—"} hint={r ? `${num(r.kpis.alertasGraves)} graves • ${num(r.kpis.alertasAtendidos)} atendidos` : undefined} trend={r?.kpis.variacaoEventos} icon={Activity} variant="risk" carregando={resumo.isLoading} />
+        <KpiCard label="Alertas registrados" value={r ? num(r.kpis.eventos) : "—"} hint={r ? `${num(r.kpis.alertasGraves)} graves • ${r.kpis.percentualAtendidos === null ? "—" : `${num(r.kpis.percentualAtendidos)}%`} atendidos (${num(r.kpis.alertasAtendidos)})` : undefined} trend={r?.kpis.variacaoEventos} icon={Activity} variant="risk" carregando={resumo.isLoading} />
         <KpiCard label="Motoristas analisados" value={r ? num(r.kpis.motoristasAnalisados) : "—"} hint={r ? `${num(r.kpis.turnos)} turnos` : undefined} icon={Users} carregando={resumo.isLoading} />
         <KpiCard label="Veículos analisados" value={r ? num(r.kpis.veiculosAnalisados) : "—"} hint={r ? `${num(r.kpis.horasDirigidas)} h dirigidas` : undefined} icon={Truck} variant="warning" carregando={resumo.isLoading} />
         <KpiCard
@@ -247,11 +261,10 @@ export default function ReportsCenter() {
         </ChartCard>
       </section>
 
-      <section className="glass-card rounded-2xl p-6 relative overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-primary/15 blur-3xl" />
+      <section className="glass-card rounded-xl p-6 relative overflow-hidden">
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/30 to-primary/5 text-primary flex items-center justify-center">
+            <div className="h-9 w-9 rounded-lg bg-accent text-accent-foreground flex items-center justify-center">
               <Bot className="h-4 w-4" />
             </div>
             <div>
@@ -283,9 +296,8 @@ export default function ReportsCenter() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {TIPOS.map((t) => (
-            <div key={t.tipo} className="glass-card rounded-2xl p-5 flex flex-col gap-3 hover:border-primary/40 transition relative overflow-hidden">
-              <div className={cn("absolute -top-8 -right-8 w-28 h-28 rounded-full bg-gradient-to-br opacity-60 blur-2xl", t.acento)} />
-              <div className={cn("relative p-2.5 rounded-xl bg-gradient-to-br w-fit", t.acento)}>
+            <div key={t.tipo} className="glass-card rounded-xl p-5 flex flex-col gap-3 hover:border-primary/40 transition relative overflow-hidden">
+              <div className={cn("relative p-2 rounded-lg w-fit", t.acento)}>
                 <t.icone className="h-5 w-5" />
               </div>
               <div className="relative">
@@ -330,7 +342,7 @@ function Historico() {
     onError: (e) => toast.error(mensagemDeErro(e)),
   });
   return (
-    <section className="glass-card rounded-2xl p-6">
+    <section className="glass-card rounded-xl p-6">
       <h2 className="text-base font-semibold tracking-tight mb-3">Relatórios gerados</h2>
       <Conteudo q={q} altura={120}>
         {(lista) =>
@@ -451,7 +463,7 @@ function Agendamentos({ filtros }: { filtros: Query }) {
     a.frequencia === "diaria" ? `todo dia às ${a.horario}` : a.frequencia === "semanal" ? `toda ${DIAS_SEMANA[a.diaSemana ?? 1].toLowerCase()} às ${a.horario}` : `todo dia ${a.diaMes} às ${a.horario}`;
 
   return (
-    <section className="glass-card rounded-2xl p-6">
+    <section className="glass-card rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
         <CalendarClock className="h-4 w-4 text-primary" />
         <div>

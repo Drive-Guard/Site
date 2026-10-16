@@ -44,7 +44,7 @@ export default function Usuarios() {
   );
 
   return (
-    <div className="glass-card rounded-2xl p-5">
+    <div className="glass-card rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-base font-semibold">Usuários da dashboard</h3>

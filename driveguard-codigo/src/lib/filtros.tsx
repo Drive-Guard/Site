@@ -1,7 +1,8 @@
 /** Filtros globais da dashboard (período, região, tipo de veículo). */
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Query } from "./api";
+import { escreverParametros, useParametros } from "./navegacao";
 
 export type Periodo = "7d" | "30d" | "90d" | "ano" | "personalizado";
 
@@ -31,8 +32,26 @@ export const ROTULO_PERIODO: Record<Periodo, string> = {
   personalizado: "Personalizado",
 };
 
+const PERIODOS: Periodo[] = ["7d", "30d", "90d", "ano", "personalizado"];
+
+/**
+ * Os filtros moram na URL (?periodo=&de=&ate=&regiao=&tipo_veiculo=), para
+ * os atalhos entre telas abrirem já filtrados e o voltar do navegador
+ * funcionar (ver lib/navegacao.tsx).
+ */
 export function FiltrosProvider({ children }: { children: ReactNode }) {
-  const [filtros, setFiltros] = useState<Filtros>({ periodo: "30d", regiao: "", tipoVeiculo: "" });
+  const url = useParametros();
+  const periodoUrl = url.get("periodo") as Periodo | null;
+  const de = url.get("de") ?? undefined;
+  const ate = url.get("ate") ?? undefined;
+  const filtros: Filtros = {
+    periodo: de ? "personalizado" : periodoUrl && PERIODOS.includes(periodoUrl) ? periodoUrl : "30d",
+    de,
+    ate,
+    regiao: url.get("regiao") ?? "",
+    tipoVeiculo: url.get("tipo_veiculo") ?? "",
+  };
+  const chave = JSON.stringify(filtros);
 
   const valor = useMemo<ContextoFiltros>(() => {
     const query: Query =
@@ -45,8 +64,20 @@ export function FiltrosProvider({ children }: { children: ReactNode }) {
       filtros.periodo === "personalizado" && filtros.de
         ? `${filtros.de.split("-").reverse().join("/")} a ${(filtros.ate ?? filtros.de).split("-").reverse().join("/")}`
         : ROTULO_PERIODO[filtros.periodo];
-    return { filtros, definir: (p) => setFiltros((f) => ({ ...f, ...p })), query, rotuloPeriodo };
-  }, [filtros]);
+    const definir = (p: Partial<Filtros>) => {
+      const novo = { ...filtros, ...p };
+      const personalizado = novo.periodo === "personalizado";
+      escreverParametros({
+        periodo: novo.periodo === "30d" ? null : novo.periodo,
+        de: personalizado ? novo.de : null,
+        ate: personalizado ? novo.ate : null,
+        regiao: novo.regiao || null,
+        tipo_veiculo: novo.tipoVeiculo || null,
+      });
+    };
+    return { filtros, definir, query, rotuloPeriodo };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave]);
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
 }

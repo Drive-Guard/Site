@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 export function RealtimeAlerts({ motoristas, aoSelecionar }: { motoristas: MotoristaTempoReal[]; aoSelecionar?: (id: string) => void }) {
   if (motoristas.length === 0) {
-    return <Vazio icone={<Eye className="h-5 w-5 text-risk-low" />}>Nenhum motorista com fadiga acima de 60 nos últimos 30 minutos.</Vazio>;
+    return <Vazio icone={<Eye className="h-5 w-5 text-risk-low" />}>Nenhum motorista sonolento (score ≥ 70) nos últimos 30 minutos.</Vazio>;
   }
   return (
     <div className="space-y-3 max-h-[420px] overflow-auto pr-2">
@@ -15,7 +15,8 @@ export function RealtimeAlerts({ motoristas, aoSelecionar }: { motoristas: Motor
         <button
           key={a.motoristaId}
           onClick={() => aoSelecionar?.(a.motoristaId)}
-          className={cn("w-full text-left rounded-xl border p-3 flex items-center gap-3 transition-all hover:brightness-110", CHIP_RISCO[a.risco])}
+          title="Abrir o painel do motorista"
+          className={cn("clicavel w-full text-left rounded-lg border p-3 flex items-center gap-3", CHIP_RISCO[a.risco])}
         >
           <div className={cn("h-2.5 w-2.5 rounded-full pulse-dot shrink-0", PONTO_RISCO[a.risco])} />
           <div className="flex-1 min-w-0">

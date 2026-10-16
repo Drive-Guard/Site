@@ -3,6 +3,7 @@ import { Bot, Lightbulb, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { Conteudo } from "@/components/comum/Estado";
+import { TextoComLinks } from "@/components/comum/TextoComLinks";
 import { api, mensagemDeErro, type Query } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFiltros } from "@/lib/filtros";
@@ -68,14 +69,16 @@ export function Insights() {
         {(dados) => (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {dados.recomendacoes.map((ins) => (
-              <div key={ins.id} className={cn("rounded-xl border p-4 transition hover:scale-[1.01]", CHIP_RISCO[ins.severidade])}>
+              <div key={ins.id} className={cn("rounded-lg border p-4 transition", CHIP_RISCO[ins.severidade])}>
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="font-semibold text-sm text-foreground">{ins.titulo}</h4>
                   <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-background/40 border border-current shrink-0">
                     {ROTULO_SEVERIDADE[ins.severidade] ?? ins.severidade}
                   </span>
                 </div>
-                <p className="mt-1.5 text-xs text-muted-foreground">{ins.descricao}</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  <TextoComLinks texto={ins.descricao} />
+                </p>
                 {ins.acao && <p className="mt-3 text-xs font-medium">{ins.acao} →</p>}
               </div>
             ))}

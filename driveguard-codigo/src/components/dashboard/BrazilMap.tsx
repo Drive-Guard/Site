@@ -48,9 +48,9 @@ export interface CidadeMapa {
 export function BrazilMap({ cidades }: { cidades: CidadeMapa[] }) {
   const maximo = Math.max(1, ...cidades.map((c) => c.acidentesSono));
   return (
-    <div className="relative aspect-square rounded-xl bg-gradient-to-br from-secondary/40 to-background/60 border border-border overflow-hidden">
+    <div className="relative aspect-square rounded-xl bg-secondary/40 border border-border overflow-hidden">
       <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
-        <path d={CAMINHO} fill="oklch(0.72 0.18 220 / 0.12)" stroke="oklch(0.72 0.18 220 / 0.6)" strokeWidth="0.4" strokeLinejoin="round" />
+        <path d={CAMINHO} fill="color-mix(in oklch, var(--color-primary) 12%, transparent)" stroke="color-mix(in oklch, var(--color-primary) 55%, transparent)" strokeWidth="0.4" strokeLinejoin="round" />
       </svg>
       {cidades.map((c) => {
         const tamanho = 8 + (c.acidentesSono / maximo) * 18;
