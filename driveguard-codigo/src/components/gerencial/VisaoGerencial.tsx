@@ -94,7 +94,8 @@ export default function VisaoGerencial() {
               {k && (
                 <>
                   {rotuloPeriodo}: {num(k.periodo.turnos)} turnos, {num(k.periodo.horasDirigidas)} h ao volante e {num(k.periodo.alertas)} alertas ({num(k.periodo.alertasGraves)} graves).{" "}
-                  {k.periodo.variacaoFadiga !== null && (
+                  {k.periodo.variacaoFadiga !== null && Math.abs(k.periodo.variacaoFadiga) < 1 && <>A fadiga ficou estável em relação ao período anterior. </>}
+                  {k.periodo.variacaoFadiga !== null && Math.abs(k.periodo.variacaoFadiga) >= 1 && (
                     <>
                       A fadiga {k.periodo.variacaoFadiga <= 0 ? "caiu" : "subiu"}{" "}
                       <span className={cn("font-semibold", k.periodo.variacaoFadiga <= 0 ? "text-risk-low" : "text-risk-high")}>{Math.abs(k.periodo.variacaoFadiga)}%</span> em relação ao período anterior.{" "}

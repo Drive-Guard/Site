@@ -44,7 +44,7 @@ async function requisitar<T>(metodo: string, caminho: string, query?: Query, cor
 
 export const api = {
   get: <T>(caminho: string, query?: Query) => requisitar<T>("GET", caminho, query),
-  post: <T>(caminho: string, corpo?: unknown) => requisitar<T>("POST", caminho, undefined, corpo ?? {}),
+  post: <T>(caminho: string, corpo?: unknown, query?: Query) => requisitar<T>("POST", caminho, query, corpo ?? {}),
   put: <T>(caminho: string, corpo: unknown) => requisitar<T>("PUT", caminho, undefined, corpo),
   patch: <T>(caminho: string, corpo: unknown) => requisitar<T>("PATCH", caminho, undefined, corpo),
   del: <T = void>(caminho: string) => requisitar<T>("DELETE", caminho),

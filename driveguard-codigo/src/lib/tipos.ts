@@ -172,6 +172,8 @@ export interface PrfMapa extends BasePrf {
 
 export interface Insights {
   execucaoId: string | null;
+  /** Período analisado: o mesmo do filtro da dashboard. */
+  periodo: { de: string; ate: string; dias: number; rotulo: string };
   geradoEm: string;
   provedor: string;
   modelo: string | null;

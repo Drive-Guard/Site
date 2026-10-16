@@ -3,17 +3,25 @@ import { Bot, Lightbulb, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { Conteudo } from "@/components/comum/Estado";
-import { api, mensagemDeErro } from "@/lib/api";
+import { api, mensagemDeErro, type Query } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useFiltros } from "@/lib/filtros";
 import { relativo } from "@/lib/formato";
 import { CHIP_RISCO, ROTULO_SEVERIDADE } from "@/lib/risco";
 import type { Insights as TipoInsights } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 
+/** Só o período do filtro: os insights cobrem a frota inteira, sem região nem tipo de veículo. */
+function usePeriodoDosInsights(): Query {
+  const { query } = useFiltros();
+  return query.de ? { de: query.de, ate: query.ate } : { periodo: query.periodo };
+}
+
 export function useInsights() {
+  const periodo = usePeriodoDosInsights();
   return useQuery({
-    queryKey: ["insights"],
-    queryFn: () => api.get<TipoInsights>("/dashboard/insights"),
+    queryKey: ["insights", periodo],
+    queryFn: () => api.get<TipoInsights>("/dashboard/insights", periodo),
     // Enquanto uma rodada está sendo gerada, confere de 5 em 5 segundos.
     refetchInterval: (q) => (q.state.data?.atualizando ? 5000 : 60_000),
   });
@@ -21,10 +29,11 @@ export function useInsights() {
 
 export function Insights() {
   const q = useInsights();
+  const periodo = usePeriodoDosInsights();
   const { pode } = useAuth();
   const cliente = useQueryClient();
   const gerar = useMutation({
-    mutationFn: () => api.post<{ execucaoId: string }>("/dashboard/insights/gerar"),
+    mutationFn: () => api.post<{ execucaoId: string }>("/dashboard/insights/gerar", undefined, periodo),
     onSuccess: () => {
       toast.success("Nova análise pedida. Os insights aparecem em alguns segundos.");
       setTimeout(() => cliente.invalidateQueries({ queryKey: ["insights"] }), 1500);
@@ -38,7 +47,7 @@ export function Insights() {
   return (
     <ChartCard
       title="Insights & recomendações automáticas"
-      subtitle={d ? `Geradas por ${origem} ${relativo(d.geradoEm)}, com base nos últimos 7 dias${d.atualizando ? " • atualizando…" : ""}` : "Geradas com base nos padrões detectados"}
+      subtitle={d ? `Geradas por ${origem} ${relativo(d.geradoEm)} • período: ${d.periodo.rotulo}${d.atualizando ? " • atualizando…" : ""}` : "Geradas com base nos padrões detectados"}
       action={
         <div className="flex items-center gap-2">
           {pode("admin", "gestor") && (
