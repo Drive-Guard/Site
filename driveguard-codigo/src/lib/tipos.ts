@@ -428,6 +428,10 @@ export interface MotoristaCadastro {
   status: string;
   cadastrado: boolean;
   ultimaLeituraEm: string | null;
+  /** Câmera do último turno (para saber de onde veio o "não cadastrado"). */
+  ultimoDispositivo: string | null;
+  /** Com histórico, excluir arquiva em vez de apagar. */
+  temHistorico: boolean;
 }
 
 export interface VeiculoCadastro {
@@ -444,6 +448,7 @@ export interface VeiculoCadastro {
   cameraStatus: string | null;
   ultimoContatoEm: string | null;
   cameraDesde: string | null;
+  temHistorico: boolean;
 }
 
 export interface DispositivoCadastro {
@@ -458,8 +463,12 @@ export interface DispositivoCadastro {
   placa: string | null;
   veiculoTipo: string | null;
   vinculadoDesde: string | null;
+  ultimoMotoristaId: string | null;
   ultimoMotoristaCodigo: string | null;
   ultimoMotoristaNome: string | null;
+  /** O último motorista desta câmera ainda está como "não cadastrado". */
+  ultimoMotoristaPendente: boolean;
+  temHistorico: boolean;
 }
 
 export interface Vinculo {
@@ -484,6 +493,7 @@ export interface RotaCadastro {
   distanciaKm: number | null;
   ativo: boolean;
   viagens: number;
+  temHistorico: boolean;
 }
 
 export interface ViagemCadastro {
@@ -502,6 +512,57 @@ export interface ViagemCadastro {
   motoristaCodigo: string | null;
   motoristaNome: string | null;
   turnos: number;
+}
+
+/** O que aconteceu numa exclusão: apagado de vez ou arquivado (tinha histórico). */
+export interface ResultadoExclusao {
+  resultado: "excluido" | "arquivado";
+}
+
+/** Resposta do assistente "colocar câmera em operação". */
+export interface ResultadoOperacao {
+  veiculo: { id: string; placa: string };
+  camera: { id: string; deviceId: string; codigo: string };
+  motorista: { id: string; codigo: string | null; nome: string; idDoDispositivo: string | null } | null;
+  configuracao: { DRIVEGUARD_DEVICE_ID: string; DRIVEGUARD_MOTORISTA_ID: string | null };
+}
+
+/** Aba Motoristas com um intervalo passado ("Ontem", "7 dias"...). */
+export interface MotoristaHistorico {
+  motoristaId: string;
+  codigo: string | null;
+  nome: string;
+  regiao: string;
+  tipoVeiculo: string;
+  placa: string | null;
+  veiculoCodigo: string | null;
+  turnos: number;
+  horas: number | null;
+  scoreMedio: number | null;
+  scoreMaximo: number | null;
+  risco: NivelRisco;
+  alertas: number;
+  alertasGraves: number;
+  ocorrencias: number;
+  ultimoTurnoEm: string;
+  ultimoTurnoId: string;
+}
+
+export interface TurnoResumo {
+  turnoId: string;
+  iniciadoEm: string;
+  finalizadoEm: string | null;
+  status: string;
+  origem: string | null;
+  destino: string | null;
+  placa: string | null;
+  veiculoCodigo: string | null;
+  horas: number | null;
+  scoreMedio: number | null;
+  scoreMaximo: number | null;
+  risco: NivelRisco;
+  alertas: number;
+  alertasGraves: number;
 }
 
 export interface UsuarioDashboard {

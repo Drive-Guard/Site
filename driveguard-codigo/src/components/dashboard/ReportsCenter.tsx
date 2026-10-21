@@ -22,6 +22,7 @@ import {
   Mail,
   MapPin,
   Save,
+  Pencil,
   Trash2,
   Truck,
   User,
@@ -33,7 +34,18 @@ import { ChartCard } from "@/components/dashboard/ChartCard";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { REGIOES, TIPOS_VEICULO } from "@/components/dashboard/Filters";
 import { Conteudo, Vazio } from "@/components/comum/Estado";
+import { Selecao } from "@/components/comum/Selecao";
 import { SeletorIntervalo } from "@/components/comum/SeletorIntervalo";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { abrirDownload, api, mensagemDeErro, type Query } from "@/lib/api";
 import { dataHora, num, reais } from "@/lib/formato";
 import { useFiltros } from "@/lib/filtros";
@@ -44,15 +56,30 @@ import { cn } from "@/lib/utils";
 import { DICAS } from "@/lib/dicas";
 import { Dica } from "@/components/comum/Dica";
 
-const selectClass =
-  "bg-secondary/60 border border-border text-sm rounded-lg pl-9 pr-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none w-full";
-
-function Campo({ icone: Icone, children }: { icone: React.ElementType; children: React.ReactNode }) {
+/** Confirmação de exclusão (relatório gerado, agendamento). */
+function Confirmar({ titulo, texto, aberto, aoFechar, aoConfirmar, ocupado }: { titulo: string; texto: string; aberto: boolean; aoFechar: () => void; aoConfirmar: () => void; ocupado: boolean }) {
   return (
-    <div className="relative">
-      <Icone className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-      {children}
-    </div>
+    <AlertDialog open={aberto} onOpenChange={(a) => !a && aoFechar()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{titulo}</AlertDialogTitle>
+          <AlertDialogDescription>{texto}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-risk-high text-white hover:bg-risk-high/90"
+            disabled={ocupado}
+            onClick={(e) => {
+              e.preventDefault();
+              aoConfirmar();
+            }}
+          >
+            {ocupado && <Loader2 className="h-4 w-4 animate-spin" />} Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -144,61 +171,69 @@ export default function ReportsCenter() {
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Campo icone={Calendar}>
-            <select className={selectClass} value={f.periodo} onChange={(e) => definir({ periodo: e.target.value })}>
-              <option value="7d">Últimos 7 dias</option>
-              <option value="30d">Últimos 30 dias</option>
-              <option value="90d">Últimos 90 dias</option>
-              <option value="ano">Este ano</option>
-              <option value="personalizado">Personalizado</option>
-            </select>
-          </Campo>
-          <Campo icone={MapPin}>
-            <select className={selectClass} value={f.regiao} onChange={(e) => definir({ regiao: e.target.value })}>
-              <option value="">Todas as regiões</option>
-              {REGIOES.map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-          </Campo>
-          <Campo icone={User}>
-            <select className={selectClass} value={f.risco} onChange={(e) => definir({ risco: e.target.value })}>
-              <option value="">Todos os motoristas</option>
-              <option value="critico">Risco crítico</option>
-              <option value="alto">Risco alto</option>
-              <option value="medio">Risco médio</option>
-              <option value="baixo">Risco baixo</option>
-            </select>
-          </Campo>
-          <Campo icone={Truck}>
-            <select className={selectClass} value={f.veiculo_id} onChange={(e) => definir({ veiculo_id: e.target.value })}>
-              <option value="">Todos os veículos</option>
-              {(veiculos.data ?? []).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.cameraCodigo ?? "sem câmera"} • {v.placa}
-                </option>
-              ))}
-            </select>
-          </Campo>
-          <Campo icone={Car}>
-            <select className={selectClass} value={f.tipo_veiculo} onChange={(e) => definir({ tipo_veiculo: e.target.value })}>
-              <option value="">Todas as categorias</option>
-              {TIPOS_VEICULO.map((t) => (
-                <option key={t.valor} value={t.valor}>
-                  {t.rotulo}
-                </option>
-              ))}
-            </select>
-          </Campo>
-          <Campo icone={Clock}>
-            <select className={selectClass} value={f.faixa_horaria} onChange={(e) => definir({ faixa_horaria: e.target.value })}>
-              <option value="">Todos os horários</option>
-              <option value="madrugada">Madrugada (0h–6h)</option>
-              <option value="manha">Manhã (6h–12h)</option>
-              <option value="tarde">Tarde (12h–18h)</option>
-              <option value="noite">Noite (18h–0h)</option>
-            </select>
-          </Campo>
+          <Selecao
+            rotulo="Período"
+            icone={Calendar}
+            valor={f.periodo}
+            aoMudar={(v) => definir({ periodo: v })}
+            opcoes={[
+              { valor: "7d", rotulo: "Últimos 7 dias" },
+              { valor: "30d", rotulo: "Últimos 30 dias" },
+              { valor: "90d", rotulo: "Últimos 90 dias" },
+              { valor: "ano", rotulo: "Este ano" },
+              { valor: "personalizado", rotulo: "Personalizado" },
+            ]}
+          />
+          <Selecao
+            rotulo="Região"
+            icone={MapPin}
+            valor={f.regiao}
+            aoMudar={(v) => definir({ regiao: v })}
+            opcoes={[{ valor: "", rotulo: "Todas as regiões" }, ...REGIOES.map((x) => ({ valor: x, rotulo: x }))]}
+          />
+          <Selecao
+            rotulo="Risco"
+            icone={User}
+            valor={f.risco}
+            aoMudar={(v) => definir({ risco: v })}
+            opcoes={[
+              { valor: "", rotulo: "Todos os motoristas" },
+              { valor: "critico", rotulo: "Risco crítico" },
+              { valor: "alto", rotulo: "Risco alto" },
+              { valor: "medio", rotulo: "Risco médio" },
+              { valor: "baixo", rotulo: "Risco baixo" },
+            ]}
+          />
+          <Selecao
+            rotulo="Veículo"
+            icone={Truck}
+            valor={f.veiculo_id}
+            aoMudar={(v) => definir({ veiculo_id: v })}
+            opcoes={[
+              { valor: "", rotulo: "Todos os veículos" },
+              ...(veiculos.data ?? []).map((v) => ({ valor: v.id, rotulo: `${v.cameraCodigo ?? "sem câmera"} • ${v.placa}` })),
+            ]}
+          />
+          <Selecao
+            rotulo="Categoria"
+            icone={Car}
+            valor={f.tipo_veiculo}
+            aoMudar={(v) => definir({ tipo_veiculo: v })}
+            opcoes={[{ valor: "", rotulo: "Todas as categorias" }, ...TIPOS_VEICULO.map((t) => ({ valor: t.valor, rotulo: t.rotulo }))]}
+          />
+          <Selecao
+            rotulo="Horário"
+            icone={Clock}
+            valor={f.faixa_horaria}
+            aoMudar={(v) => definir({ faixa_horaria: v })}
+            opcoes={[
+              { valor: "", rotulo: "Todos os horários" },
+              { valor: "madrugada", rotulo: "Madrugada (0h–6h)" },
+              { valor: "manha", rotulo: "Manhã (6h–12h)" },
+              { valor: "tarde", rotulo: "Tarde (12h–18h)" },
+              { valor: "noite", rotulo: "Noite (18h–0h)" },
+            ]}
+          />
         </div>
         {f.periodo === "personalizado" && (
           <div className="mt-3">
@@ -337,7 +372,18 @@ export default function ReportsCenter() {
 }
 
 function Historico() {
+  const cliente = useQueryClient();
   const q = useQuery({ queryKey: ["relatorios"], queryFn: () => api.get<RelatorioGerado[]>("/relatorios"), refetchInterval: 15_000 });
+  const [apagar, setApagar] = useState<RelatorioGerado | null>(null);
+  const excluir = useMutation({
+    mutationFn: (id: string) => api.del(`/relatorios/${id}`),
+    onSuccess: () => {
+      toast.success("Relatório excluído");
+      cliente.invalidateQueries({ queryKey: ["relatorios"] });
+      setApagar(null);
+    },
+    onError: (e) => toast.error(mensagemDeErro(e)),
+  });
   const baixar = useMutation({
     mutationFn: (id: string) => api.get<{ url: string }>(`/relatorios/${id}/download`),
     onSuccess: (r) => abrirDownload(r.url),
@@ -383,7 +429,7 @@ function Historico() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="py-2 text-right whitespace-nowrap space-x-1">
                         {r.status === "pronto" ? (
                           <button onClick={() => baixar.mutate(r.id)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border hover:bg-secondary/60">
                             <Download className="h-3 w-3" /> Baixar
@@ -393,6 +439,9 @@ function Historico() {
                             {r.status}
                           </span>
                         )}
+                        <button onClick={() => setApagar(r)} className="inline-flex items-center text-xs p-1.5 rounded-md border border-border hover:bg-risk-high/10 hover:text-risk-high" title="Excluir">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -402,6 +451,14 @@ function Historico() {
           )
         }
       </Conteudo>
+      <Confirmar
+        titulo="Excluir o relatório?"
+        texto="O arquivo é apagado e o link deixa de funcionar, inclusive o do e-mail. Dá para gerar de novo quando quiser."
+        aberto={!!apagar}
+        aoFechar={() => setApagar(null)}
+        aoConfirmar={() => apagar && excluir.mutate(apagar.id)}
+        ocupado={excluir.isPending}
+      />
     </section>
   );
 }
@@ -416,12 +473,29 @@ function Agendamentos({ filtros }: { filtros: Query }) {
   const [diaSemana, setDiaSemana] = useState(1);
   const [diaMes, setDiaMes] = useState(1);
   const [destinatarios, setDestinatarios] = useState("");
+  const [editando, setEditando] = useState<Agendamento | null>(null);
+  const [apagar, setApagar] = useState<Agendamento | null>(null);
+
+  function editar(a: Agendamento) {
+    setEditando(a);
+    setTipo(a.tipo);
+    setFormato(a.formato);
+    setFrequencia(a.frequencia as typeof frequencia);
+    setHorario(a.horario);
+    setDiaSemana(a.diaSemana ?? 1);
+    setDiaMes(a.diaMes ?? 1);
+    setDestinatarios(a.destinatarios.join(", "));
+  }
+  function limpar() {
+    setEditando(null);
+    setDestinatarios("");
+  }
 
   const salvar = useMutation({
     mutationFn: () => {
       // O período do agendamento acompanha a frequência (ontem, últimos 7 ou 30 dias).
       const { periodo: _p, de: _d, ate: _a, ...resto } = filtros;
-      return api.post("/relatorios/agendamentos", {
+      const corpo = {
         tipo,
         formato,
         frequencia,
@@ -429,12 +503,16 @@ function Agendamentos({ filtros }: { filtros: Query }) {
         diaSemana: frequencia === "semanal" ? diaSemana : undefined,
         diaMes: frequencia === "mensal" ? diaMes : undefined,
         destinatarios: destinatarios.split(/[,;\s]+/).filter(Boolean),
-        filtros: resto,
-      });
+      };
+      // Na edição, os filtros e o "ativo" do agendamento ficam como estavam.
+      return editando
+        ? api.put(`/relatorios/agendamentos/${editando.id}`, { ...corpo, filtros: editando.filtros, ativo: editando.ativo })
+        : api.post("/relatorios/agendamentos", { ...corpo, filtros: resto });
     },
     onSuccess: () => {
-      toast.success("Agendamento salvo");
+      toast.success(editando ? "Agendamento atualizado" : "Agendamento salvo");
       cliente.invalidateQueries({ queryKey: ["agendamentos"] });
+      limpar();
     },
     onError: (e) => toast.error(mensagemDeErro(e)),
   });
@@ -456,7 +534,12 @@ function Agendamentos({ filtros }: { filtros: Query }) {
   });
   const remover = useMutation({
     mutationFn: (id: string) => api.del(`/relatorios/agendamentos/${id}`),
-    onSuccess: () => cliente.invalidateQueries({ queryKey: ["agendamentos"] }),
+    onSuccess: (_, id) => {
+      toast.success("Agendamento excluído");
+      cliente.invalidateQueries({ queryKey: ["agendamentos"] });
+      setApagar(null);
+      if (editando?.id === id) limpar();
+    },
     onError: (e) => toast.error(mensagemDeErro(e)),
   });
 
@@ -476,48 +559,38 @@ function Agendamentos({ filtros }: { filtros: Query }) {
       <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
         <div className="md:col-span-2">
           <label className="text-xs text-muted-foreground mb-1 block">Relatório</label>
-          <select className={input} value={tipo} onChange={(e) => setTipo(e.target.value)}>
-            {TIPOS.map((t) => (
-              <option key={t.tipo} value={t.tipo}>
-                {t.titulo}
-              </option>
-            ))}
-          </select>
+          <Selecao valor={tipo} aoMudar={setTipo} opcoes={TIPOS.map((t) => ({ valor: t.tipo, rotulo: t.titulo }))} />
         </div>
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Formato</label>
-          <select className={input} value={formato} onChange={(e) => setFormato(e.target.value)}>
-            <option value="pdf">PDF</option>
-            <option value="xlsx">Excel</option>
-            <option value="csv">CSV</option>
-          </select>
+          <Selecao
+            valor={formato}
+            aoMudar={setFormato}
+            opcoes={[
+              { valor: "pdf", rotulo: "PDF" },
+              { valor: "xlsx", rotulo: "Excel" },
+              { valor: "csv", rotulo: "CSV" },
+            ]}
+          />
         </div>
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">Frequência</label>
-          <select className={input} value={frequencia} onChange={(e) => setFrequencia(e.target.value as typeof frequencia)}>
-            <option value="diaria">Diária</option>
-            <option value="semanal">Semanal</option>
-            <option value="mensal">Mensal</option>
-          </select>
+          <Selecao
+            valor={frequencia}
+            aoMudar={(v) => setFrequencia(v as typeof frequencia)}
+            opcoes={[
+              { valor: "diaria", rotulo: "Diária" },
+              { valor: "semanal", rotulo: "Semanal" },
+              { valor: "mensal", rotulo: "Mensal" },
+            ]}
+          />
         </div>
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">{frequencia === "semanal" ? "Dia da semana" : frequencia === "mensal" ? "Dia do mês" : "Dia"}</label>
           {frequencia === "semanal" ? (
-            <select className={input} value={diaSemana} onChange={(e) => setDiaSemana(Number(e.target.value))}>
-              {DIAS_SEMANA.map((d, i) => (
-                <option key={d} value={i}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <Selecao valor={String(diaSemana)} aoMudar={(v) => setDiaSemana(Number(v))} opcoes={DIAS_SEMANA.map((d, i) => ({ valor: String(i), rotulo: d }))} />
           ) : frequencia === "mensal" ? (
-            <select className={input} value={diaMes} onChange={(e) => setDiaMes(Number(e.target.value))}>
-              {Array.from({ length: 28 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {i + 1}
-                </option>
-              ))}
-            </select>
+            <Selecao valor={String(diaMes)} aoMudar={(v) => setDiaMes(Number(v))} opcoes={Array.from({ length: 28 }, (_, i) => ({ valor: String(i + 1), rotulo: String(i + 1) }))} />
           ) : (
             <input className={input} value="Todos" disabled />
           )}
@@ -534,13 +607,21 @@ function Agendamentos({ filtros }: { filtros: Query }) {
           </div>
         </div>
       </div>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center justify-end gap-2">
+        {editando && (
+          <>
+            <span className="mr-auto text-xs text-muted-foreground">Editando o agendamento de {ROTULO_TIPO[editando.tipo]} ({descricao(editando)})</span>
+            <button onClick={limpar} className="px-3 py-2 text-sm rounded-lg border border-border hover:bg-secondary/60">
+              Cancelar edição
+            </button>
+          </>
+        )}
         <button
           onClick={() => salvar.mutate()}
           disabled={salvar.isPending || !destinatarios.trim()}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition glow-primary disabled:opacity-60"
         >
-          {salvar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar agendamento
+          {salvar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {editando ? "Salvar alterações" : "Salvar agendamento"}
         </button>
       </div>
 
@@ -560,10 +641,13 @@ function Agendamentos({ filtros }: { filtros: Query }) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button onClick={() => editar(a)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border hover:bg-secondary/60" title="Editar">
+                      <Pencil className="h-3 w-3" /> Editar
+                    </button>
                     <button onClick={() => alternar.mutate(a)} className="text-xs px-2 py-1 rounded-md border border-border hover:bg-secondary/60">
                       {a.ativo ? "Pausar" : "Retomar"}
                     </button>
-                    <button onClick={() => remover.mutate(a.id)} className="text-xs p-1.5 rounded-md border border-border hover:bg-risk-high/10 hover:text-risk-high" title="Remover">
+                    <button onClick={() => setApagar(a)} className="text-xs p-1.5 rounded-md border border-border hover:bg-risk-high/10 hover:text-risk-high" title="Excluir">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -573,6 +657,14 @@ function Agendamentos({ filtros }: { filtros: Query }) {
           )
         }
       </Conteudo>
+      <Confirmar
+        titulo="Excluir o agendamento?"
+        texto="Os próximos envios param. Os relatórios já gerados continuam na lista."
+        aberto={!!apagar}
+        aoFechar={() => setApagar(null)}
+        aoConfirmar={() => apagar && remover.mutate(apagar.id)}
+        ocupado={remover.isPending}
+      />
     </section>
   );
 }

@@ -6,10 +6,21 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BotaoPrimario, BotaoSecundario, celula, entrada, Formulario, linha, Rotulo, Tabela, useSalvar } from "@/components/cadastros/comum";
 import { Conteudo, Vazio } from "@/components/comum/Estado";
+import { Selecao } from "@/components/comum/Selecao";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { type Papel, ROTULO_PAPEL, useAuth } from "@/lib/auth";
@@ -30,10 +41,12 @@ export default function Usuarios() {
   const q = useQuery({ queryKey: ["usuarios"], queryFn: () => api.get<UsuarioDashboard[]>("/usuarios") });
   const [novo, setNovo] = useState(false);
   const [senha, setSenha] = useState<{ email: string; senha: string } | null>(null);
+  const [editar, setEditar] = useState<UsuarioDashboard | null>(null);
+  const [remocao, setRemocao] = useState<UsuarioDashboard | null>(null);
 
   const mudarPapel = useSalvar(({ u, papel }: { u: UsuarioDashboard; papel: Papel }) => api.patch(`/usuarios/${encodeURIComponent(u.username)}`, { papel }), [["usuarios"]], "Papel alterado");
   const ativar = useSalvar((u: UsuarioDashboard) => api.patch(`/usuarios/${encodeURIComponent(u.username)}`, { ativo: !u.ativo }), [["usuarios"]], "Usuário atualizado");
-  const remover = useSalvar((u: UsuarioDashboard) => api.del(`/usuarios/${encodeURIComponent(u.username)}`), [["usuarios"]], "Usuário removido");
+  const remover = useSalvar((u: UsuarioDashboard) => api.del(`/usuarios/${encodeURIComponent(u.username)}`), [["usuarios"]], "Usuário removido", () => setRemocao(null));
   const redefinir = useSalvar(
     async (u: UsuarioDashboard) => {
       const r = await api.post<{ senhaTemporaria: string }>(`/usuarios/${encodeURIComponent(u.username)}/redefinir-senha`);
@@ -77,33 +90,29 @@ export default function Usuarios() {
                     </td>
                     <td className={cn(celula, "text-xs")}>{u.email}</td>
                     <td className={celula}>
-                      <select
-                        className={cn(entrada, "py-1 text-xs w-36")}
-                        value={u.papel ?? ""}
-                        disabled={souEu}
-                        onChange={(e) => mudarPapel.mutate({ u, papel: e.target.value as Papel })}
-                      >
-                        {(Object.keys(ROTULO_PAPEL) as Papel[]).map((p) => (
-                          <option key={p} value={p}>
-                            {ROTULO_PAPEL[p]}
-                          </option>
-                        ))}
-                      </select>
+                      <Selecao
+                        tamanho="sm"
+                        className="w-36"
+                        rotulo={`Papel de ${u.nome}`}
+                        valor={u.papel ?? ""}
+                        desabilitado={souEu}
+                        aoMudar={(p) => mudarPapel.mutate({ u, papel: p as Papel })}
+                        opcoes={(Object.keys(ROTULO_PAPEL) as Papel[]).map((p) => ({ valor: p, rotulo: ROTULO_PAPEL[p], detalhe: DESCRICAO_PAPEL[p] }))}
+                      />
                     </td>
                     <td className={cn(celula, "text-xs")}>{u.ativo ? (STATUS[u.status] ?? u.status) : "desativado"}</td>
                     <td className={cn(celula, "text-xs")}>{dataCurta(u.criadoEm)}</td>
                     <td className={cn(celula, "text-right whitespace-nowrap space-x-1")}>
+                      <BotaoSecundario onClick={() => setEditar(u)} title="Editar">
+                        <Pencil className="h-3 w-3" />
+                      </BotaoSecundario>
                       {!souEu && (
                         <>
                           <BotaoSecundario onClick={() => redefinir.mutate(u)} title="Gerar senha temporária">
                             <KeyRound className="h-3 w-3" />
                           </BotaoSecundario>
                           <BotaoSecundario onClick={() => ativar.mutate(u)}>{u.ativo ? "Desativar" : "Ativar"}</BotaoSecundario>
-                          <BotaoSecundario
-                            onClick={() => window.confirm(`Remover ${u.email}? Não dá para desfazer.`) && remover.mutate(u)}
-                            className="hover:text-risk-high"
-                            title="Remover"
-                          >
+                          <BotaoSecundario onClick={() => setRemocao(u)} className="hover:text-risk-high hover:border-risk-high/40" title="Remover">
                             <Trash2 className="h-3 w-3" />
                           </BotaoSecundario>
                         </>
@@ -118,6 +127,27 @@ export default function Usuarios() {
       </Conteudo>
       {novo && <FormUsuario aoFechar={() => setNovo(false)} aoCriar={(email, s) => setSenha({ email, senha: s })} />}
       {senha && <SenhaTemporaria {...senha} aoFechar={() => setSenha(null)} />}
+      {editar && <FormEditarUsuario usuario={editar} souEu={editar.email === eu?.email} aoFechar={() => setEditar(null)} />}
+      <AlertDialog open={!!remocao} onOpenChange={(a) => !a && setRemocao(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover {remocao?.email}?</AlertDialogTitle>
+            <AlertDialogDescription>O acesso dele à dashboard acaba na hora. Não dá para desfazer; para suspender sem apagar, use Desativar.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-risk-high text-white hover:bg-risk-high/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (remocao) remover.mutate(remocao);
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -144,13 +174,40 @@ function FormUsuario({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (em
         <input className={entrada} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       </Rotulo>
       <Rotulo texto="Papel">
-        <select className={entrada} value={papel} onChange={(e) => setPapel(e.target.value as Papel)}>
-          {(Object.keys(ROTULO_PAPEL) as Papel[]).map((p) => (
-            <option key={p} value={p}>
-              {ROTULO_PAPEL[p]} — {DESCRICAO_PAPEL[p]}
-            </option>
-          ))}
-        </select>
+        <Selecao
+          valor={papel}
+          aoMudar={(p) => setPapel(p as Papel)}
+          opcoes={(Object.keys(ROTULO_PAPEL) as Papel[]).map((p) => ({ valor: p, rotulo: ROTULO_PAPEL[p], detalhe: DESCRICAO_PAPEL[p] }))}
+        />
+      </Rotulo>
+    </Formulario>
+  );
+}
+
+function FormEditarUsuario({ usuario, souEu, aoFechar }: { usuario: UsuarioDashboard; souEu: boolean; aoFechar: () => void }) {
+  const [nome, setNome] = useState(usuario.nome);
+  const [papel, setPapel] = useState<Papel>(usuario.papel ?? "operador");
+  const salvar = useSalvar(
+    () => api.patch(`/usuarios/${encodeURIComponent(usuario.username)}`, { nome, ...(souEu ? {} : { papel }) }),
+    [["usuarios"], ["me"]],
+    "Usuário atualizado",
+    aoFechar,
+  );
+  return (
+    <Formulario titulo={`Editar ${usuario.email}`} aberto aoFechar={aoFechar} aoSalvar={() => salvar.mutate(undefined)} salvando={salvar.isPending}>
+      <Rotulo texto="Nome">
+        <input className={entrada} value={nome} onChange={(e) => setNome(e.target.value)} required />
+      </Rotulo>
+      <Rotulo texto="E-mail (login)" ajuda="O e-mail é o login e não muda; para outro e-mail, crie um usuário novo.">
+        <input className={entrada} value={usuario.email} disabled />
+      </Rotulo>
+      <Rotulo texto="Papel" ajuda={souEu ? "Você não pode mudar o próprio papel." : undefined}>
+        <Selecao
+          valor={papel}
+          aoMudar={(p) => setPapel(p as Papel)}
+          desabilitado={souEu}
+          opcoes={(Object.keys(ROTULO_PAPEL) as Papel[]).map((p) => ({ valor: p, rotulo: ROTULO_PAPEL[p], detalhe: DESCRICAO_PAPEL[p] }))}
+        />
       </Rotulo>
     </Formulario>
   );

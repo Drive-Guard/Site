@@ -7,12 +7,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Conteudo, Vazio } from "@/components/comum/Estado";
+import { Selecao } from "@/components/comum/Selecao";
 import { api } from "@/lib/api";
 import { dataHora, num, reais } from "@/lib/formato";
 import type { MotoristaCadastro, RotaCadastro, Uf, VeiculoCadastro, ViagemCadastro } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
-import { BotaoPrimario, BotaoSecundario, celula, entrada, Formulario, linha, numeroOuNulo, Rotulo, Tabela, useSalvar } from "./comum";
+import { BotaoExcluir, BotaoPrimario, BotaoSecundario, celula, entrada, Formulario, linha, numeroOuNulo, Rotulo, Tabela, useSalvar } from "./comum";
 
 export function Rotas() {
   const q = useQuery({ queryKey: ["cad-rotas"], queryFn: () => api.get<RotaCadastro[]>("/cadastros/rotas") });
@@ -48,10 +50,17 @@ export function Rotas() {
                   <td className={cn(celula, "text-xs")}>{r.ufsPercorridas.join(", ")}</td>
                   <td className={celula}>{r.distanciaKm ? `${num(r.distanciaKm)} km` : "—"}</td>
                   <td className={celula}>{r.viagens}</td>
-                  <td className={cn(celula, "text-right")}>
+                  <td className={cn(celula, "text-right whitespace-nowrap space-x-1")}>
                     <BotaoSecundario onClick={() => setEditar(r)}>
                       <Pencil className="h-3 w-3" /> Editar
                     </BotaoSecundario>
+                    <BotaoExcluir
+                      caminho={`/cadastros/rotas/${r.id}`}
+                      nome={`a rota ${r.origemCidade} → ${r.destinoCidade}`}
+                      temHistorico={r.temHistorico}
+                      chaves={[["cad-rotas"], ["rotas"], ["cad-viagens"]]}
+                      oQueSomeJunto={r.viagens ? "As viagens planejadas nesta rota são canceladas." : undefined}
+                    />
                   </td>
                 </tr>
               ))}
@@ -96,13 +105,7 @@ function FormRota({ rota, ufs, aoFechar }: { rota: RotaCadastro | null; ufs: Uf[
   );
 
   const seletorUf = (valor: string, mudar: (v: string) => void) => (
-    <select className={entrada} value={valor} onChange={(e) => mudar(e.target.value)}>
-      {ufs.map((u) => (
-        <option key={u.uf} value={u.uf}>
-          {u.uf}
-        </option>
-      ))}
-    </select>
+    <Selecao valor={valor} aoMudar={mudar} opcoes={ufs.map((u) => ({ valor: u.uf, rotulo: u.uf, detalhe: u.nome }))} />
   );
 
   return (
@@ -195,10 +198,11 @@ export function Viagens() {
                       <Pencil className="h-3 w-3" />
                     </BotaoSecundario>
                     {v.status === "planejada" && (
-                      <BotaoSecundario onClick={() => cancelar.mutate(v)} title="Cancelar">
+                      <BotaoSecundario onClick={() => cancelar.mutate(v)} title="Cancelar viagem">
                         <XCircle className="h-3 w-3" />
                       </BotaoSecundario>
                     )}
+                    <BotaoExcluir caminho={`/cadastros/viagens/${v.id}`} nome="a viagem" temHistorico={v.turnos > 0} chaves={[["cad-viagens"], ["roi"]]} />
                   </td>
                 </tr>
               ))}
@@ -248,42 +252,40 @@ function FormViagem({ viagem, rotas, veiculos, motoristas, aoFechar }: { viagem:
   );
 
   return (
-    <Formulario titulo={viagem ? "Editar viagem" : "Nova viagem"} aberto aoFechar={aoFechar} aoSalvar={() => salvar.mutate(undefined)} salvando={salvar.isPending}>
+    <Formulario
+      titulo={viagem ? "Editar viagem" : "Nova viagem"}
+      aberto
+      aoFechar={aoFechar}
+      aoSalvar={() => (rotaId && veiculoId ? salvar.mutate(undefined) : toast.error("Escolha a rota e o veículo."))}
+      salvando={salvar.isPending}
+    >
       <Rotulo texto="Rota">
-        <select className={entrada} value={rotaId} onChange={(e) => setRotaId(e.target.value)} required>
-          <option value="">Escolha…</option>
-          {rotas
+        <Selecao
+          valor={rotaId}
+          aoMudar={setRotaId}
+          placeholder="Escolha a rota…"
+          opcoes={rotas
             .filter((r) => r.ativo)
-            .map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.origemCidade}/{r.origemUf} → {r.destinoCidade}/{r.destinoUf}
-                {r.nome ? ` (${r.nome})` : ""}
-              </option>
-            ))}
-        </select>
+            .map((r) => ({ valor: r.id, rotulo: `${r.origemCidade}/${r.origemUf} → ${r.destinoCidade}/${r.destinoUf}`, detalhe: r.nome ?? undefined }))}
+        />
       </Rotulo>
       <div className="grid grid-cols-2 gap-3">
         <Rotulo texto="Veículo">
-          <select className={entrada} value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} required>
-            <option value="">Escolha…</option>
-            {veiculos
+          <Selecao
+            valor={veiculoId}
+            aoMudar={setVeiculoId}
+            placeholder="Escolha o veículo…"
+            opcoes={veiculos
               .filter((v) => v.ativo)
-              .map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.placa} {v.cameraCodigo ? `(${v.cameraCodigo})` : "(sem câmera)"}
-                </option>
-              ))}
-          </select>
+              .map((v) => ({ valor: v.id, rotulo: <span className="font-mono">{v.placa}</span>, detalhe: v.cameraCodigo ? `câmera ${v.cameraCodigo}` : "sem câmera" }))}
+          />
         </Rotulo>
         <Rotulo texto="Motorista (opcional)">
-          <select className={entrada} value={motoristaId} onChange={(e) => setMotoristaId(e.target.value)}>
-            <option value="">Definido pela câmera</option>
-            {motoristas.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.codigo} — {m.nome}
-              </option>
-            ))}
-          </select>
+          <Selecao
+            valor={motoristaId}
+            aoMudar={setMotoristaId}
+            opcoes={[{ valor: "", rotulo: "Definido pela câmera" }, ...motoristas.map((m) => ({ valor: m.id, rotulo: m.nome, detalhe: <span className="font-mono">{m.codigo}</span> }))]}
+          />
         </Rotulo>
         <Rotulo texto="Partida prevista">
           <input className={entrada} type="datetime-local" value={partida} onChange={(e) => setPartida(e.target.value)} required />
@@ -295,13 +297,7 @@ function FormViagem({ viagem, rotas, veiculos, motoristas, aoFechar }: { viagem:
           <input className={entrada} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="4500" />
         </Rotulo>
         <Rotulo texto="Status">
-          <select className={entrada} value={status} onChange={(e) => setStatus(e.target.value)}>
-            {Object.entries(STATUS_VIAGEM).map(([v, r]) => (
-              <option key={v} value={v}>
-                {r}
-              </option>
-            ))}
-          </select>
+          <Selecao valor={status} aoMudar={setStatus} opcoes={Object.entries(STATUS_VIAGEM).map(([valor, rotulo]) => ({ valor, rotulo }))} />
         </Rotulo>
       </div>
       <p className="text-[11px] text-muted-foreground">Horários de Brasília. O turno é casado com a viagem quando começa até 3 h antes ou depois da partida prevista.</p>

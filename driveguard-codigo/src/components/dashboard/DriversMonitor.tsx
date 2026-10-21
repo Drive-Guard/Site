@@ -1,6 +1,12 @@
 /**
- * Aba Motoristas: lista ao vivo, painel do motorista selecionado (ou da frota),
- * curva do turno, insights e ações rápidas.
+ * Aba Motoristas.
+ *
+ * "Turnos" (filtro geral da tela, no topo) escolhe o que a aba mostra:
+ *   - Agora (padrão): lista ao vivo, painel do motorista ou da frota, curva do
+ *     turno atual, insights e ações rápidas;
+ *   - Hoje, Ontem, 7 dias, 30 dias ou datas: os turnos que começaram no
+ *     intervalo, por motorista (pico e média de fadiga, horas, alertas), e no
+ *     painel do motorista a lista de turnos com a curva de cada um.
  *
  * Não há "notificar motorista": o alerta sonoro acontece na cabine, em tempo
  * real, pelo próprio dispositivo. As ações aqui registram a resposta da
@@ -12,11 +18,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Bot,
+  CalendarRange,
   Clock,
   CoffeeIcon,
   Eye,
   FileText,
   Gauge,
+  History,
   Loader2,
   Phone,
   ShieldAlert,
@@ -32,13 +40,15 @@ import {
 import { toast } from "sonner";
 import { Area, AreaChart, CartesianGrid, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Conteudo, Vazio } from "@/components/comum/Estado";
+import { Selecao } from "@/components/comum/Selecao";
+import { SeletorIntervalo } from "@/components/comum/SeletorIntervalo";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { api, mensagemDeErro } from "@/lib/api";
+import { api, mensagemDeErro, type Query } from "@/lib/api";
 import { useFiltros } from "@/lib/filtros";
 import { escreverParametros, useParametros } from "@/lib/navegacao";
-import { dataHora, num, relativo } from "@/lib/formato";
+import { dataHora, diaIso, num, relativo } from "@/lib/formato";
 import { ANEL_RISCO, CHIP_RISCO, COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP, PONTO_RISCO, ROTULO_RISCO } from "@/lib/risco";
-import type { CurvaTurno, InsightMotorista, MotoristaAoVivo, MotoristaDetalhe } from "@/lib/tipos";
+import type { CurvaTurno, InsightMotorista, MotoristaAoVivo, MotoristaDetalhe, MotoristaHistorico, TurnoResumo } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 import { ChartCard } from "./ChartCard";
 import { Filters } from "./Filters";
@@ -64,6 +74,109 @@ const ESTILO_INSIGHT: Record<string, { ring: string; chip: string; icon: string 
   critical: { ring: "border-risk-critical/50 bg-risk-critical/10", chip: "bg-risk-critical/20 text-risk-critical", icon: "text-risk-critical" },
 };
 
+// ---------------------------------------------------------------------------
+// Janela de turnos (filtro geral da tela)
+// ---------------------------------------------------------------------------
+
+type Janela = "agora" | "hoje" | "ontem" | "7d" | "30d" | "intervalo";
+
+const JANELAS: { id: Exclude<Janela, "intervalo">; rotulo: string }[] = [
+  { id: "agora", rotulo: "Agora" },
+  { id: "hoje", rotulo: "Hoje" },
+  { id: "ontem", rotulo: "Ontem" },
+  { id: "7d", rotulo: "7 dias" },
+  { id: "30d", rotulo: "30 dias" },
+];
+
+interface Intervalo {
+  de: string;
+  ate: string;
+  rotulo: string;
+}
+
+const diaMenos = (dias: number) => diaIso(new Date(Date.now() - dias * 86_400_000));
+const br = (dia: string) => dia.split("-").reverse().join("/");
+
+function intervaloDa(janela: Janela, tde: string | null, tate: string | null): Intervalo | null {
+  const hoje = diaIso(new Date());
+  switch (janela) {
+    case "hoje":
+      return { de: hoje, ate: hoje, rotulo: "Turnos de hoje" };
+    case "ontem":
+      return { de: diaMenos(1), ate: diaMenos(1), rotulo: "Turnos de ontem" };
+    case "7d":
+      return { de: diaMenos(6), ate: hoje, rotulo: "Turnos dos últimos 7 dias" };
+    case "30d":
+      return { de: diaMenos(29), ate: hoje, rotulo: "Turnos dos últimos 30 dias" };
+    case "intervalo":
+      return tde ? { de: tde, ate: tate ?? tde, rotulo: `Turnos de ${br(tde)} a ${br(tate ?? tde)}` } : null;
+    default:
+      return null;
+  }
+}
+
+function SeletorTurnos({ janela, tde, tate }: { janela: Janela; tde: string | null; tate: string | null }) {
+  // Mudar a janela limpa a seleção (o motorista ou o turno podem não existir no novo intervalo).
+  const ir = (valores: Record<string, string | null>) => escreverParametros({ ...valores, turno: null, filtro: null }, { historico: true });
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+        <History className="h-4 w-4" /> Turnos
+        <Dica texto={DICAS.janelaTurnos} />
+      </span>
+      <div role="radiogroup" aria-label="Turnos" className="inline-flex flex-wrap gap-1 rounded-lg border border-border bg-secondary/40 p-1">
+        {JANELAS.map((j) => (
+          <button
+            key={j.id}
+            type="button"
+            role="radio"
+            aria-checked={janela === j.id}
+            onClick={() => ir({ turnos: j.id === "agora" ? null : j.id, tde: null, tate: null })}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-medium transition",
+              janela === j.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {j.id === "agora" && <span className={cn("mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle", janela === "agora" ? "bg-risk-low pulse-dot" : "bg-muted-foreground/60")} />}
+            {j.rotulo}
+          </button>
+        ))}
+      </div>
+      <SeletorIntervalo
+        de={janela === "intervalo" ? (tde ?? undefined) : undefined}
+        ate={janela === "intervalo" ? (tate ?? undefined) : undefined}
+        maxDias={31}
+        textoVazio="Escolher datas"
+        className={cn("py-1.5 text-xs", janela === "intervalo" && "border-primary/50 text-primary")}
+        aoMudar={(de, ate) => ir({ turnos: "intervalo", tde: de, tate: ate })}
+      />
+    </div>
+  );
+}
+
+/**
+ * Filtro, ordem, rota, janela de turnos e motorista selecionado vêm da URL
+ * (lib/navegacao.tsx): as outras telas abrem esta já filtrada, e o voltar do
+ * navegador funciona.
+ */
+export default function DriversMonitor() {
+  const url = useParametros();
+  const janelaUrl = url.get("turnos") as Janela | null;
+  const janela: Janela = janelaUrl && (janelaUrl === "intervalo" || JANELAS.some((j) => j.id === janelaUrl)) ? janelaUrl : "agora";
+  const intervalo = intervaloDa(janela, url.get("tde"), url.get("tate"));
+
+  return (
+    <>
+      <Filters exportar={false} periodo={false} ao_vivo={!intervalo} antes={<SeletorTurnos janela={intervalo ? janela : "agora"} tde={url.get("tde")} tate={url.get("tate")} />} />
+      {intervalo ? <MotoristasHistorico intervalo={intervalo} /> : <MotoristasAoVivo />}
+    </>
+  );
+}
+
+// ===========================================================================
+// Agora (ao vivo)
+// ===========================================================================
+
 type FiltroLista = "ativos" | "risco" | "alertas" | "ocorrencias" | "todos";
 
 const FILTROS: { id: FiltroLista; rotulo: string; teste: (m: MotoristaAoVivo) => boolean }[] = [
@@ -82,11 +195,7 @@ function mesmaRota(rotaMotorista: string | null, filtro: string) {
   return a === b;
 }
 
-/**
- * Filtro, ordem, rota e motorista selecionado vêm da URL (lib/navegacao.tsx):
- * as outras telas abrem esta já filtrada, e o voltar do navegador funciona.
- */
-export default function DriversMonitor() {
+function MotoristasAoVivo() {
   const { query, rotuloPeriodo } = useFiltros();
   const url = useParametros();
   const filtro = (FILTROS.find((f) => f.id === url.get("filtro"))?.id ?? "ativos") as FiltroLista;
@@ -110,132 +219,129 @@ export default function DriversMonitor() {
   const rotuloRota = rota?.split("|").join(" ↔ ");
 
   return (
-    <>
-      <Filters exportar={false} periodo={false} />
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
-        <aside className="lg:col-span-3">
-          <div className="glass-card rounded-xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-base font-semibold flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" /> Motoristas
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {ativos.length} dirigindo agora • {emRisco} em risco
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1.5 mb-3" role="tablist" aria-label="Filtrar motoristas">
-              {FILTROS.map((f) => {
-                const qtd = todos.filter(f.teste).length;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={filtro === f.id}
-                    onClick={() => escreverParametros({ filtro: f.id === "ativos" ? null : f.id }, { historico: true })}
-                    className={cn(
-                      "text-[11px] px-2 py-1 rounded-md border transition",
-                      filtro === f.id ? "bg-accent text-accent-foreground border-transparent font-medium" : "border-border text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {f.rotulo} <span className="tabular-nums opacity-70">{qtd}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {(rota || ordemMedia || filtro === "ocorrencias") && (
-              <div className="flex flex-wrap gap-1.5 mb-3 text-[11px]">
-                {rota && (
-                  <button type="button" onClick={() => escreverParametros({ rota: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
-                    Rota {rotuloRota} <X className="h-3 w-3" />
-                  </button>
-                )}
-                {ordemMedia && (
-                  <button type="button" onClick={() => escreverParametros({ ordem: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
-                    Ordem: fadiga média 30 dias <X className="h-3 w-3" />
-                  </button>
-                )}
-                {filtro === "ocorrencias" && <span className="px-2 py-1 text-muted-foreground">ocorrências {rotuloPeriodo.toLowerCase()}</span>}
-              </div>
-            )}
-            <div className="space-y-2 overflow-auto pr-1 flex-1 min-h-0">
-              <Conteudo q={lista} altura={400}>
-                {() =>
-                  visiveis.length === 0 ? (
-                    <Vazio>Nenhum motorista neste filtro. Escolha "Todos" para ver a frota inteira.</Vazio>
-                  ) : (
-                    <>
-                      {visiveis.map((d) => {
-                        const ativo = d.motoristaId === selecionado;
-                        return (
-                          <button
-                            key={d.motoristaId}
-                            onClick={() => selecionar(ativo ? null : d.motoristaId)}
-                            className={cn("w-full text-left rounded-lg border p-3 transition-all", ANEL_RISCO[d.ativo ? d.risco : "sem_dados"], ativo && "ring-2 ring-primary/60")}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <span className={cn("h-2.5 w-2.5 rounded-full", d.ativo && "pulse-dot", PONTO_RISCO[d.ativo ? d.risco : "sem_dados"])} />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-medium text-foreground truncate">{d.nome}</p>
-                                  <span className="text-[10px] font-mono text-muted-foreground">{d.codigo ?? "sem código"}</span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                                  <span className="flex items-center gap-1">
-                                    <Truck className="h-3 w-3" /> {d.veiculoCodigo ?? d.tipoVeiculo}
-                                  </span>
-                                  <span>•</span>
-                                  <span>{d.regiao}</span>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1">{d.ativo ? <><Clock className="h-3 w-3" /> {num(d.horasTurno, 1)}h</> : relativo(d.ultimaLeituraEm)}</span>
-                                  {d.ocorrencias > 0 && (
-                                    <span className={cn("flex items-center gap-0.5 font-medium", d.ocorrenciasSono ? "text-risk-critical" : "text-muted-foreground")} title="Ocorrências no período">
-                                      <ShieldAlert className="h-3 w-3" /> {d.ocorrencias}
-                                    </span>
-                                  )}
-                                </div>
-                                {ordemMedia && <p className="mt-0.5 text-[11px] text-muted-foreground">média 30 dias: <span className="font-medium text-foreground">{num(d.scoreMedio30d, 1)}</span></p>}
-                              </div>
-                              <div className="text-right">
-                                <div className="flex items-center gap-1 justify-end">
-                                  <span className="text-lg font-bold leading-none">{num(d.score, 0)}</span>
-                                  {d.ativo && (d.tendencia === "up" || d.tendencia === "down") && (
-                                    <Dica
-                                      lado="left"
-                                      texto={
-                                        <>
-                                          <b>{d.tendencia === "up" ? "Fadiga subindo" : "Fadiga caindo"}</b>: a última leitura ({num(d.score, 0)}) está{" "}
-                                          {d.tendencia === "up" ? "acima" : "abaixo"} da média das 5 leituras anteriores ({num(d.scoreAnterior, 1)}).
-                                          <br />
-                                          Laranja para cima = piorando; verde para baixo = melhorando. Variação de até 1 ponto não mostra seta.
-                                        </>
-                                      }
-                                    >
-                                      {d.tendencia === "up" ? <TrendingUp className="h-3.5 w-3.5 text-risk-high" /> : <TrendingDown className="h-3.5 w-3.5 text-risk-low" />}
-                                    </Dica>
-                                  )}
-                                </div>
-                                <span className={cn("mt-1 inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border", CHIP_RISCO[d.ativo ? d.risco : "sem_dados"])}>
-                                  {d.ativo ? ROTULO_RISCO[d.risco] : "fora do turno"}
-                                </span>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </>
-                  )
-                }
-              </Conteudo>
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+      <aside className="lg:col-span-3">
+        <div className="glass-card rounded-xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-base font-semibold flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" /> Motoristas
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {ativos.length} dirigindo agora • {emRisco} em risco
+              </p>
             </div>
           </div>
-        </aside>
+          <div className="flex flex-wrap gap-1.5 mb-3" role="tablist" aria-label="Filtrar motoristas">
+            {FILTROS.map((f) => {
+              const qtd = todos.filter(f.teste).length;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={filtro === f.id}
+                  onClick={() => escreverParametros({ filtro: f.id === "ativos" ? null : f.id }, { historico: true })}
+                  className={cn(
+                    "text-[11px] px-2 py-1 rounded-md border transition",
+                    filtro === f.id ? "bg-accent text-accent-foreground border-transparent font-medium" : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
+                  )}
+                >
+                  {f.rotulo} <span className="tabular-nums opacity-70">{qtd}</span>
+                </button>
+              );
+            })}
+          </div>
+          {(rota || ordemMedia || filtro === "ocorrencias") && (
+            <div className="flex flex-wrap gap-1.5 mb-3 text-[11px]">
+              {rota && (
+                <button type="button" onClick={() => escreverParametros({ rota: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
+                  Rota {rotuloRota} <X className="h-3 w-3" />
+                </button>
+              )}
+              {ordemMedia && (
+                <button type="button" onClick={() => escreverParametros({ ordem: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
+                  Ordem: fadiga média 30 dias <X className="h-3 w-3" />
+                </button>
+              )}
+              {filtro === "ocorrencias" && <span className="px-2 py-1 text-muted-foreground">ocorrências {rotuloPeriodo.toLowerCase()}</span>}
+            </div>
+          )}
+          <div className="space-y-2 overflow-auto pr-1 flex-1 min-h-0">
+            <Conteudo q={lista} altura={400}>
+              {() =>
+                visiveis.length === 0 ? (
+                  <Vazio>Nenhum motorista neste filtro. Escolha "Todos" para ver a frota inteira.</Vazio>
+                ) : (
+                  <>
+                    {visiveis.map((d) => {
+                      const ativo = d.motoristaId === selecionado;
+                      return (
+                        <button
+                          key={d.motoristaId}
+                          onClick={() => selecionar(ativo ? null : d.motoristaId)}
+                          className={cn("w-full text-left rounded-lg border p-3 transition-all hover:border-primary/40", ANEL_RISCO[d.ativo ? d.risco : "sem_dados"], ativo && "ring-2 ring-primary/60")}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className={cn("h-2.5 w-2.5 rounded-full", d.ativo && "pulse-dot", PONTO_RISCO[d.ativo ? d.risco : "sem_dados"])} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-foreground truncate">{d.nome}</p>
+                                <span className="text-[10px] font-mono text-muted-foreground">{d.codigo ?? "sem código"}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Truck className="h-3 w-3" /> {d.veiculoCodigo ?? d.tipoVeiculo}
+                                </span>
+                                <span>•</span>
+                                <span>{d.regiao}</span>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">{d.ativo ? <><Clock className="h-3 w-3" /> {num(d.horasTurno, 1)}h</> : relativo(d.ultimaLeituraEm)}</span>
+                                {d.ocorrencias > 0 && (
+                                  <span className={cn("flex items-center gap-0.5 font-medium", d.ocorrenciasSono ? "text-risk-critical" : "text-muted-foreground")} title="Ocorrências no período">
+                                    <ShieldAlert className="h-3 w-3" /> {d.ocorrencias}
+                                  </span>
+                                )}
+                              </div>
+                              {ordemMedia && <p className="mt-0.5 text-[11px] text-muted-foreground">média 30 dias: <span className="font-medium text-foreground">{num(d.scoreMedio30d, 1)}</span></p>}
+                            </div>
+                            <div className="text-right">
+                              <div className="flex items-center gap-1 justify-end">
+                                <span className="text-lg font-bold leading-none">{num(d.score, 0)}</span>
+                                {d.ativo && (d.tendencia === "up" || d.tendencia === "down") && (
+                                  <Dica
+                                    lado="left"
+                                    texto={
+                                      <>
+                                        <b>{d.tendencia === "up" ? "Fadiga subindo" : "Fadiga caindo"}</b>: a última leitura ({num(d.score, 0)}) está{" "}
+                                        {d.tendencia === "up" ? "acima" : "abaixo"} da média das 5 leituras anteriores ({num(d.scoreAnterior, 1)}).
+                                        <br />
+                                        Laranja para cima = piorando; verde para baixo = melhorando. Variação de até 1 ponto não mostra seta.
+                                      </>
+                                    }
+                                  >
+                                    {d.tendencia === "up" ? <TrendingUp className="h-3.5 w-3.5 text-risk-high" /> : <TrendingDown className="h-3.5 w-3.5 text-risk-low" />}
+                                  </Dica>
+                                )}
+                              </div>
+                              <span className={cn("mt-1 inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border", CHIP_RISCO[d.ativo ? d.risco : "sem_dados"])}>
+                                {d.ativo ? ROTULO_RISCO[d.risco] : "fora do turno"}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </>
+                )
+              }
+            </Conteudo>
+          </div>
+        </div>
+      </aside>
 
-        <section className="lg:col-span-7 space-y-6">{selecionado ? <PainelMotorista id={selecionado} aoLimpar={() => selecionar(null)} /> : <PainelFrota lista={ativos} aoSelecionar={selecionar} />}</section>
-      </div>
-    </>
+      <section className="lg:col-span-7 space-y-6">{selecionado ? <PainelMotorista id={selecionado} aoLimpar={() => selecionar(null)} /> : <PainelFrota lista={ativos} aoSelecionar={selecionar} />}</section>
+    </div>
   );
 }
 
@@ -288,6 +394,77 @@ function PainelFrota({ lista, aoSelecionar }: { lista: MotoristaAoVivo[]; aoSele
   );
 }
 
+/** Curva de fadiga de um turno (ao vivo ou escolhido no histórico). */
+function GraficoCurva({ curva }: { curva: CurvaTurno }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <AreaChart data={curva.pontos}>
+        <defs>
+          <linearGradient id="drvFad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={COR.primaria} stopOpacity={0.5} />
+            <stop offset="95%" stopColor={COR.primaria} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
+        <XAxis dataKey="hora" stroke={COR.eixo} fontSize={12} />
+        <YAxis stroke={COR.eixo} fontSize={12} domain={[0, 100]} />
+        <Tooltip contentStyle={ESTILO_TOOLTIP} formatter={(v: number, n: string) => [num(v, 1), n === "fadiga" ? "Motorista" : n === "mediaFrota" ? "Média da frota" : "Máximo"]} />
+        <ReferenceLine y={curva.limiteAlerta} stroke={COR.risco} strokeDasharray="4 4" label={{ value: "Limite de alerta", fill: COR.risco, fontSize: 11, position: "right" }} />
+        <Area type="monotone" dataKey="fadiga" stroke={COR.primaria} strokeWidth={2.5} fill="url(#drvFad)" connectNulls />
+        <Line type="monotone" dataKey="mediaFrota" stroke={COR.neutro} strokeWidth={1.5} strokeDasharray="5 5" dot={false} connectNulls />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function CabecalhoMotorista({ d, rotulo, aoLimpar }: { d: MotoristaDetalhe | undefined; rotulo: string; aoLimpar: () => void }) {
+  return (
+    <div className="glass-card rounded-xl p-4 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">{rotulo}</p>
+        <h2 className="text-xl font-bold truncate">{d?.nome ?? "…"}</h2>
+        {d && (
+          <p className="text-xs text-muted-foreground">
+            {d.codigo} • {d.veiculo.codigo ?? d.veiculo.tipo}
+            {d.veiculo.placa ? ` (${d.veiculo.placa})` : ""} • {d.regiao}
+            {d.idade ? ` • ${d.idade} anos` : ""}
+            {d.anosExperiencia !== null ? ` • ${d.anosExperiencia} anos de CNH` : ""}
+          </p>
+        )}
+      </div>
+      <button onClick={aoLimpar} className="shrink-0 px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-secondary/60">
+        Limpar seleção
+      </button>
+    </div>
+  );
+}
+
+function ListaOcorrencias({ ocorrencias }: { ocorrencias: MotoristaDetalhe["ocorrencias"] }) {
+  return ocorrencias.length === 0 ? (
+    <Vazio>Nenhuma ocorrência registrada.</Vazio>
+  ) : (
+    <ul className="divide-y divide-border">
+      {ocorrencias.map((o) => (
+        <li key={o.id} className="py-3 flex gap-3">
+          <AlertTriangle className={cn("h-4 w-4 mt-0.5 shrink-0", o.relacionadoSonolencia ? "text-risk-high" : "text-muted-foreground")} />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {o.tipo ?? "Ocorrência"} • {dataHora(o.ocorridoEm)}
+              {o.local ? ` • ${o.local}` : ""}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {[o.relacionadoSonolencia ? "Ligada à sonolência" : "Sem relação com sonolência", o.gravidade ? ROTULO_GRAVIDADE_OCORRENCIA[o.gravidade] : "Sem acidente", o.causa]
+                .filter(Boolean)
+                .join(" • ")}
+            </p>
+            {o.descricao && <p className="text-xs text-muted-foreground mt-1 leading-snug">{o.descricao}</p>}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void }) {
   const detalhe = useQuery({ queryKey: ["motorista", id], queryFn: () => api.get<MotoristaDetalhe>(`/motoristas/${id}`), refetchInterval: 30_000 });
   const curva = useQuery({ queryKey: ["curva", id], queryFn: () => api.get<CurvaTurno>(`/motoristas/${id}/curva-turno`), refetchInterval: 60_000 });
@@ -296,23 +473,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
 
   return (
     <>
-      <div className="glass-card rounded-xl p-4 flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Motorista selecionado</p>
-          <h2 className="text-xl font-bold">{d?.nome ?? "…"}</h2>
-          {d && (
-            <p className="text-xs text-muted-foreground">
-              {d.codigo} • {d.veiculo.codigo ?? d.veiculo.tipo}
-              {d.veiculo.placa ? ` (${d.veiculo.placa})` : ""} • {d.regiao}
-              {d.idade ? ` • ${d.idade} anos` : ""}
-              {d.anosExperiencia !== null ? ` • ${d.anosExperiencia} anos de CNH` : ""}
-            </p>
-          )}
-        </div>
-        <button onClick={aoLimpar} className="px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-secondary/60">
-          Limpar seleção
-        </button>
-      </div>
+      <CabecalhoMotorista d={d} rotulo="Motorista selecionado" aoLimpar={aoLimpar} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
@@ -353,29 +514,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
           className="xl:col-span-2"
         >
           <Conteudo q={curva} altura={300}>
-            {(c) =>
-              !c.turno ? (
-                <Vazio>Sem turno com leituras.</Vazio>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={c.pontos}>
-                    <defs>
-                      <linearGradient id="drvFad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={COR.primaria} stopOpacity={0.5} />
-                        <stop offset="95%" stopColor={COR.primaria} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
-                    <XAxis dataKey="hora" stroke={COR.eixo} fontSize={12} />
-                    <YAxis stroke={COR.eixo} fontSize={12} domain={[0, 100]} />
-                    <Tooltip contentStyle={ESTILO_TOOLTIP} formatter={(v: number, n: string) => [num(v, 1), n === "fadiga" ? "Motorista" : n === "mediaFrota" ? "Média da frota" : "Máximo"]} />
-                    <ReferenceLine y={c.limiteAlerta} stroke={COR.risco} strokeDasharray="4 4" label={{ value: "Limite de alerta", fill: COR.risco, fontSize: 11, position: "right" }} />
-                    <Area type="monotone" dataKey="fadiga" stroke={COR.primaria} strokeWidth={2.5} fill="url(#drvFad)" connectNulls />
-                    <Line type="monotone" dataKey="mediaFrota" stroke={COR.neutro} strokeWidth={1.5} strokeDasharray="5 5" dot={false} connectNulls />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )
-            }
+            {(c) => (!c.turno ? <Vazio>Sem turno com leituras.</Vazio> : <GraficoCurva curva={c} />)}
           </Conteudo>
         </ChartCard>
 
@@ -411,29 +550,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
       </div>
 
       <ChartCard title="Ocorrências do motorista" info={DICAS.ocorrenciasMotorista} subtitle="Acidentes e ocorrências da própria frota registrados para este motorista">
-        {!d ? null : d.ocorrencias.length === 0 ? (
-          <Vazio>Nenhuma ocorrência registrada.</Vazio>
-        ) : (
-          <ul className="divide-y divide-border">
-            {d.ocorrencias.map((o) => (
-              <li key={o.id} className="py-3 flex gap-3">
-                <AlertTriangle className={cn("h-4 w-4 mt-0.5 shrink-0", o.relacionadoSonolencia ? "text-risk-high" : "text-muted-foreground")} />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    {o.tipo ?? "Ocorrência"} • {dataHora(o.ocorridoEm)}
-                    {o.local ? ` • ${o.local}` : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {[o.relacionadoSonolencia ? "Ligada à sonolência" : "Sem relação com sonolência", o.gravidade ? ROTULO_GRAVIDADE_OCORRENCIA[o.gravidade] : "Sem acidente", o.causa]
-                      .filter(Boolean)
-                      .join(" • ")}
-                  </p>
-                  {o.descricao && <p className="text-xs text-muted-foreground mt-1 leading-snug">{o.descricao}</p>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        {d ? <ListaOcorrencias ocorrencias={d.ocorrencias} /> : null}
       </ChartCard>
     </>
   );
@@ -523,29 +640,307 @@ function DialogOcorrencia({ aberto, aoFechar, motorista }: { aberto: boolean; ao
         </DialogHeader>
         <div className="space-y-3">
           <textarea className={cn(campo, "min-h-24")} placeholder="O que aconteceu?" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-          <select className={campo} value={gravidade} onChange={(e) => setGravidade(e.target.value)}>
-            <option value="">Gravidade (se houve acidente)</option>
-            <option value="sem_vitimas">Sem vítimas</option>
-            <option value="com_feridos">Com feridos</option>
-            <option value="com_fatais">Com vítimas fatais</option>
-          </select>
+          <Selecao
+            valor={gravidade}
+            aoMudar={setGravidade}
+            rotulo="Gravidade"
+            opcoes={[
+              { valor: "", rotulo: "Sem acidente", detalhe: "quase acidente ou ocorrência sem vítimas" },
+              { valor: "sem_vitimas", rotulo: "Acidente sem vítimas" },
+              { valor: "com_feridos", rotulo: "Acidente com feridos" },
+              { valor: "com_fatais", rotulo: "Acidente com vítimas fatais" },
+            ]}
+          />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={sono} onChange={(e) => setSono(e.target.checked)} /> Relacionada a sonolência
           </label>
         </div>
         <DialogFooter>
-          <button onClick={aoFechar} className="px-3 py-2 text-sm rounded-lg border border-border">
+          <button onClick={aoFechar} className="px-3 py-2 text-sm rounded-lg border border-border hover:bg-secondary/60">
             Cancelar
           </button>
           <button
             onClick={() => salvar.mutate()}
             disabled={descricao.trim().length < 3 || salvar.isPending}
-            className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground disabled:opacity-60"
+            className="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
             {salvar.isPending ? "Salvando…" : "Registrar"}
           </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ===========================================================================
+// Turnos anteriores (Hoje, Ontem, 7 dias, 30 dias, datas)
+// ===========================================================================
+
+type FiltroHistorico = "todos" | "risco" | "alertas" | "ocorrencias";
+
+const FILTROS_HISTORICO: { id: FiltroHistorico; rotulo: string; teste: (m: MotoristaHistorico) => boolean }[] = [
+  { id: "todos", rotulo: "Todos", teste: () => true },
+  { id: "risco", rotulo: "Chegaram ao risco", teste: (m) => (m.scoreMaximo ?? 0) >= 70 },
+  { id: "alertas", rotulo: "Com alertas", teste: (m) => m.alertas > 0 },
+  { id: "ocorrencias", rotulo: "Com ocorrência", teste: (m) => m.ocorrencias > 0 },
+];
+
+/** Região e tipo de veículo do filtro global; o intervalo é o da janela de turnos. */
+function useQueryIntervalo(intervalo: Intervalo): Query {
+  const { query } = useFiltros();
+  const { periodo: _p, de: _d, ate: _a, ...dimensoes } = query;
+  return { ...dimensoes, de: intervalo.de, ate: intervalo.ate };
+}
+
+function MotoristasHistorico({ intervalo }: { intervalo: Intervalo }) {
+  const url = useParametros();
+  const q = useQueryIntervalo(intervalo);
+  const filtro = (FILTROS_HISTORICO.find((f) => f.id === url.get("filtro"))?.id ?? "todos") as FiltroHistorico;
+  const lista = useQuery({ queryKey: ["motoristas-historico", q], queryFn: () => api.get<MotoristaHistorico[]>("/motoristas/historico", q) });
+  const todos = lista.data ?? [];
+  const visiveis = todos.filter(FILTROS_HISTORICO.find((f) => f.id === filtro)!.teste);
+  const selecionado = url.get("motorista");
+  const selecionar = (id: string | null) => escreverParametros({ motorista: id, turno: null, codigo: null }, { historico: true });
+  const horas = todos.reduce((a, m) => a + (m.horas ?? 0), 0);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+      <aside className="lg:col-span-3">
+        <div className="glass-card rounded-xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
+          <div className="mb-3">
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <CalendarRange className="h-4 w-4 text-primary" /> {intervalo.rotulo}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {todos.length} motoristas • {todos.reduce((a, m) => a + m.turnos, 0)} turnos • {num(horas, 0)} h ao volante
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mb-3" role="tablist" aria-label="Filtrar motoristas">
+            {FILTROS_HISTORICO.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={filtro === f.id}
+                onClick={() => escreverParametros({ filtro: f.id === "todos" ? null : f.id }, { historico: true })}
+                className={cn(
+                  "text-[11px] px-2 py-1 rounded-md border transition",
+                  filtro === f.id ? "bg-accent text-accent-foreground border-transparent font-medium" : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
+                )}
+              >
+                {f.rotulo} <span className="tabular-nums opacity-70">{todos.filter(f.teste).length}</span>
+              </button>
+            ))}
+          </div>
+          <div className="space-y-2 overflow-auto pr-1 flex-1 min-h-0">
+            <Conteudo q={lista} altura={400}>
+              {() =>
+                visiveis.length === 0 ? (
+                  <Vazio>Nenhum turno neste intervalo e filtro.</Vazio>
+                ) : (
+                  <>
+                    {visiveis.map((m) => {
+                      const ativo = m.motoristaId === selecionado;
+                      return (
+                        <button
+                          key={m.motoristaId}
+                          onClick={() => selecionar(ativo ? null : m.motoristaId)}
+                          className={cn("w-full text-left rounded-lg border p-3 transition-all hover:border-primary/40", ANEL_RISCO[m.risco], ativo && "ring-2 ring-primary/60")}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className={cn("h-2.5 w-2.5 rounded-full", PONTO_RISCO[m.risco])} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-foreground truncate">{m.nome}</p>
+                                <span className="text-[10px] font-mono text-muted-foreground">{m.codigo ?? "sem código"}</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-2 mt-0.5 text-[11px] text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Truck className="h-3 w-3" /> {m.veiculoCodigo ?? m.tipoVeiculo}
+                                </span>
+                                <span>•</span>
+                                <span>
+                                  {m.turnos} {m.turnos === 1 ? "turno" : "turnos"} • {num(m.horas, 1)}h
+                                </span>
+                                {m.alertas > 0 && (
+                                  <span className={cn("flex items-center gap-0.5", m.alertasGraves ? "text-risk-high font-medium" : "")}>
+                                    <AlertTriangle className="h-3 w-3" /> {m.alertas}
+                                  </span>
+                                )}
+                                {m.ocorrencias > 0 && (
+                                  <span className="flex items-center gap-0.5 font-medium text-risk-critical">
+                                    <ShieldAlert className="h-3 w-3" /> {m.ocorrencias}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-lg font-bold leading-none" title="Pico de fadiga no intervalo">
+                                {num(m.scoreMaximo, 0)}
+                              </span>
+                              <p className="text-[10px] text-muted-foreground">média {num(m.scoreMedio, 0)}</p>
+                              <span className={cn("mt-0.5 inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border", CHIP_RISCO[m.risco])}>{ROTULO_RISCO[m.risco]}</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </>
+                )
+              }
+            </Conteudo>
+          </div>
+        </div>
+      </aside>
+      <section className="lg:col-span-7 space-y-6">
+        {selecionado ? (
+          <PainelHistoricoMotorista id={selecionado} intervalo={intervalo} resumo={todos.find((m) => m.motoristaId === selecionado)} aoLimpar={() => selecionar(null)} />
+        ) : (
+          <PainelHistoricoFrota lista={todos} intervalo={intervalo} carregando={lista.isLoading} aoSelecionar={selecionar} />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function PainelHistoricoFrota({ lista, intervalo, carregando, aoSelecionar }: { lista: MotoristaHistorico[]; intervalo: Intervalo; carregando: boolean; aoSelecionar: (id: string) => void }) {
+  const horas = lista.reduce((a, m) => a + (m.horas ?? 0), 0);
+  const alertas = lista.reduce((a, m) => a + m.alertas, 0);
+  const graves = lista.reduce((a, m) => a + m.alertasGraves, 0);
+  const comMedia = lista.filter((m) => m.scoreMedio !== null && m.horas);
+  const media = comMedia.length ? comMedia.reduce((a, m) => a + m.scoreMedio! * m.horas!, 0) / comMedia.reduce((a, m) => a + m.horas!, 0) : null;
+  const emRisco = lista.filter((m) => (m.scoreMaximo ?? 0) >= 70);
+  return (
+    <>
+      <div className="glass-card rounded-xl p-4">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">Visão da frota</p>
+        <h2 className="text-xl font-bold">{intervalo.rotulo}</h2>
+        <p className="text-xs text-muted-foreground">Selecione um motorista para ver os turnos dele e a curva de fadiga de cada um.</p>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="Score médio" info={DICAS.mediaPeriodo} value={num(media, 0)} hint="todas as leituras do intervalo" icon={Gauge} variant={(media ?? 0) >= 70 ? "risk" : (media ?? 0) >= 50 ? "warning" : "safe"} carregando={carregando} />
+        <KpiCard label="Horas ao volante" info={DICAS.horasPeriodo} value={`${num(horas, 0)}h`} hint={`${lista.reduce((a, m) => a + m.turnos, 0)} turnos`} icon={Clock} carregando={carregando} />
+        <KpiCard label="Alertas" info={DICAS.alertasPeriodo} value={num(alertas)} hint={`${num(graves)} graves`} icon={AlertTriangle} variant="warning" carregando={carregando} />
+        <KpiCard label="Chegaram ao risco" info={DICAS.picoFadiga} value={emRisco.length} hint="pico de fadiga ≥ 70" icon={Zap} variant="risk" carregando={carregando} />
+      </div>
+      <ChartCard title="Maiores picos de fadiga" subtitle="Quem chegou mais perto do limite no intervalo">
+        {emRisco.length === 0 ? (
+          <Vazio icone={<ShieldCheck className="h-5 w-5 text-risk-low" />}>Ninguém chegou ao risco neste intervalo.</Vazio>
+        ) : (
+          <ul className="grid md:grid-cols-2 gap-2">
+            {[...emRisco]
+              .sort((a, b) => (b.scoreMaximo ?? 0) - (a.scoreMaximo ?? 0))
+              .slice(0, 10)
+              .map((m) => (
+                <li
+                  key={m.motoristaId}
+                  onClick={() => aoSelecionar(m.motoristaId)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && aoSelecionar(m.motoristaId)}
+                  title="Ver os turnos do motorista"
+                  className={cn("clicavel rounded-lg border p-3 text-sm", CHIP_RISCO[m.risco])}
+                >
+                  <span className="font-medium text-foreground">{m.nome}</span> <span className="font-mono text-xs">{m.codigo}</span>
+                  <p className="text-xs text-muted-foreground">
+                    pico {num(m.scoreMaximo, 0)} • média {num(m.scoreMedio, 0)} • {m.turnos} turnos • {m.alertas} alertas
+                  </p>
+                </li>
+              ))}
+          </ul>
+        )}
+      </ChartCard>
+    </>
+  );
+}
+
+function PainelHistoricoMotorista({ id, intervalo, resumo, aoLimpar }: { id: string; intervalo: Intervalo; resumo?: MotoristaHistorico; aoLimpar: () => void }) {
+  const url = useParametros();
+  const q = useQueryIntervalo(intervalo);
+  const detalhe = useQuery({ queryKey: ["motorista", id], queryFn: () => api.get<MotoristaDetalhe>(`/motoristas/${id}`) });
+  const turnos = useQuery({ queryKey: ["turnos-motorista", id, q.de, q.ate], queryFn: () => api.get<TurnoResumo[]>(`/motoristas/${id}/turnos`, { de: q.de, ate: q.ate }) });
+  const lista = turnos.data ?? [];
+  const turnoId = url.get("turno") ?? lista[0]?.turnoId ?? null;
+  const turno = lista.find((t) => t.turnoId === turnoId);
+  const curva = useQuery({
+    queryKey: ["curva", id, turnoId],
+    queryFn: () => api.get<CurvaTurno>(`/motoristas/${id}/curva-turno`, { turno_id: turnoId! }),
+    enabled: !!turnoId,
+  });
+  const d = detalhe.data;
+  const ocorrencias = (d?.ocorrencias ?? []).filter((o) => {
+    const dia = diaIso(new Date(o.ocorridoEm));
+    return dia >= intervalo.de && dia <= intervalo.ate;
+  });
+  const escolher = (t: string) => escreverParametros({ turno: t }, { historico: false });
+
+  return (
+    <>
+      <CabecalhoMotorista d={d} rotulo={intervalo.rotulo} aoLimpar={aoLimpar} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="Pico de fadiga" info={DICAS.picoFadiga} value={num(resumo?.scoreMaximo, 0)} hint={resumo ? ROTULO_RISCO[resumo.risco] : undefined} icon={Gauge} variant={(resumo?.scoreMaximo ?? 0) >= 70 ? "risk" : (resumo?.scoreMaximo ?? 0) >= 40 ? "warning" : "safe"} carregando={!resumo && turnos.isLoading} />
+        <KpiCard label="Score médio" info={DICAS.mediaPeriodo} value={num(resumo?.scoreMedio, 1)} hint={d ? `30 dias: ${num(d.ultimos30d.scoreMedio, 1)}` : undefined} icon={Sparkles} carregando={!resumo && turnos.isLoading} />
+        <KpiCard label="Horas ao volante" info={DICAS.horasPeriodo} value={resumo ? `${num(resumo.horas, 1)}h` : "—"} hint={resumo ? `${resumo.turnos} ${resumo.turnos === 1 ? "turno" : "turnos"}` : undefined} icon={Clock} carregando={!resumo && turnos.isLoading} />
+        <KpiCard label="Alertas" info={DICAS.alertasPeriodo} value={resumo?.alertas ?? 0} hint={resumo ? `${resumo.alertasGraves} graves` : undefined} icon={AlertTriangle} variant="warning" carregando={!resumo && turnos.isLoading} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+        <ChartCard title="Turnos" info={DICAS.turnosPeriodo} subtitle={`${lista.length} no intervalo`} className="xl:col-span-2">
+          <Conteudo q={turnos} altura={300}>
+            {() =>
+              lista.length === 0 ? (
+                <Vazio>Sem turnos neste intervalo.</Vazio>
+              ) : (
+                <ul className="space-y-1.5 max-h-[340px] overflow-auto pr-1" role="listbox" aria-label="Turnos do motorista">
+                  {lista.map((t) => (
+                    <li key={t.turnoId}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={t.turnoId === turnoId}
+                        onClick={() => escolher(t.turnoId)}
+                        className={cn(
+                          "w-full rounded-lg border px-3 py-2 text-left text-xs transition hover:border-primary/40",
+                          t.turnoId === turnoId ? "border-primary/60 bg-primary/10" : "border-border",
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-foreground text-sm">{dataHora(t.iniciadoEm)}</span>
+                          <span className={cn("text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border", CHIP_RISCO[t.risco])}>pico {num(t.scoreMaximo, 0)}</span>
+                        </div>
+                        <p className="mt-0.5 text-muted-foreground">
+                          {num(t.horas, 1)}h{t.origem ? ` • ${t.origem} → ${t.destino}` : ""} • média {num(t.scoreMedio, 0)}
+                          {t.alertas > 0 ? ` • ${t.alertas} alertas` : ""}
+                          {t.status === "em_andamento" ? " • em andamento" : ""}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )
+            }
+          </Conteudo>
+        </ChartCard>
+        <ChartCard
+          title="Evolução da fadiga no turno"
+          info={DICAS.curvaTurno}
+          subtitle={turno ? `Turno de ${dataHora(turno.iniciadoEm)}${turno.origem ? ` • ${turno.origem} → ${turno.destino}` : ""} • tracejado: média da frota` : "Escolha um turno"}
+          className="xl:col-span-3"
+        >
+          {!turnoId ? (
+            <Vazio>Sem turno para mostrar.</Vazio>
+          ) : (
+            <Conteudo q={curva} altura={300}>
+              {(c) => (!c.turno ? <Vazio>Este turno não tem leituras.</Vazio> : <GraficoCurva curva={c} />)}
+            </Conteudo>
+          )}
+        </ChartCard>
+      </div>
+
+      <ChartCard title="Ocorrências no intervalo" info={DICAS.ocorrenciasMotorista} subtitle="Acidentes e ocorrências da própria frota registrados para este motorista">
+        {d ? <ListaOcorrencias ocorrencias={ocorrencias} /> : null}
+      </ChartCard>
+    </>
   );
 }

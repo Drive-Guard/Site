@@ -1,15 +1,13 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Calendar, Download, Loader2, MapPin, Truck } from "lucide-react";
 import { toast } from "sonner";
+import { Selecao } from "@/components/comum/Selecao";
 import { SeletorIntervalo } from "@/components/comum/SeletorIntervalo";
 import { baixarCsv, mensagemDeErro } from "@/lib/api";
 import { type Periodo, ROTULO_PERIODO, useFiltros } from "@/lib/filtros";
 import { diaIso } from "@/lib/formato";
 import { Dica } from "@/components/comum/Dica";
 import { DICAS } from "@/lib/dicas";
-
-const select =
-  "bg-secondary/60 border border-border text-sm rounded-lg pl-9 pr-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none";
 
 export const REGIOES = ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"];
 export const TIPOS_VEICULO = [
@@ -24,7 +22,18 @@ export const TIPOS_VEICULO = [
  * (Visão Gerencial); as telas do "agora" (Monitoramento, Motoristas) usam
  * janelas próprias em cada quadro e mostram o selo "Tempo real".
  */
-export function Filters({ ao_vivo = true, exportar = true, periodo = true }: { ao_vivo?: boolean; exportar?: boolean; periodo?: boolean }) {
+export function Filters({
+  ao_vivo = true,
+  exportar = true,
+  periodo = true,
+  antes,
+}: {
+  ao_vivo?: boolean;
+  exportar?: boolean;
+  periodo?: boolean;
+  /** Controles próprios da tela, no começo da barra (ex.: turnos da aba Motoristas). */
+  antes?: ReactNode;
+}) {
   const { filtros, definir, query } = useFiltros();
   const [baixando, setBaixando] = useState(false);
 
@@ -41,41 +50,36 @@ export function Filters({ ao_vivo = true, exportar = true, periodo = true }: { a
 
   return (
     <div className="glass-card rounded-xl p-4 flex flex-wrap items-center gap-3">
+      {antes}
       {periodo && (
-        <div className="relative">
-          <Calendar className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <select aria-label="Período" className={select} value={filtros.periodo} onChange={(e) => definir({ periodo: e.target.value as Periodo })}>
-            {(Object.keys(ROTULO_PERIODO) as Periodo[]).map((p) => (
-              <option key={p} value={p}>
-                {ROTULO_PERIODO[p]}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Selecao
+          rotulo="Período"
+          icone={Calendar}
+          className="w-auto min-w-44"
+          valor={filtros.periodo}
+          aoMudar={(v) => definir({ periodo: v as Periodo })}
+          opcoes={(Object.keys(ROTULO_PERIODO) as Periodo[]).map((p) => ({ valor: p, rotulo: ROTULO_PERIODO[p] }))}
+        />
       )}
       {periodo && filtros.periodo === "personalizado" && (
         <SeletorIntervalo de={filtros.de} ate={filtros.ate} maxDias={400} aoMudar={(de, ate) => definir({ de, ate })} />
       )}
-      <div className="relative">
-        <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select aria-label="Região" className={select} value={filtros.regiao} onChange={(e) => definir({ regiao: e.target.value })}>
-          <option value="">Todas as regiões</option>
-          {REGIOES.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-      </div>
-      <div className="relative">
-        <Truck className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select aria-label="Tipo de veículo" className={select} value={filtros.tipoVeiculo} onChange={(e) => definir({ tipoVeiculo: e.target.value })}>
-          <option value="">Todos os veículos</option>
-          {TIPOS_VEICULO.map((t) => (
-            <option key={t.valor} value={t.valor}>
-              {t.rotulo}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Selecao
+        rotulo="Região"
+        icone={MapPin}
+        className="w-auto min-w-44"
+        valor={filtros.regiao}
+        aoMudar={(v) => definir({ regiao: v })}
+        opcoes={[{ valor: "", rotulo: "Todas as regiões" }, ...REGIOES.map((r) => ({ valor: r, rotulo: r }))]}
+      />
+      <Selecao
+        rotulo="Tipo de veículo"
+        icone={Truck}
+        className="w-auto min-w-44"
+        valor={filtros.tipoVeiculo}
+        aoMudar={(v) => definir({ tipoVeiculo: v })}
+        opcoes={[{ valor: "", rotulo: "Todos os veículos" }, ...TIPOS_VEICULO.map((t) => ({ valor: t.valor, rotulo: t.rotulo }))]}
+      />
       <div className="ml-auto flex items-center gap-2">
         {ao_vivo && (
           <div className="flex items-center gap-2 text-xs text-risk-low font-medium px-3 py-2 rounded-lg bg-risk-low/10 border border-risk-low/30">

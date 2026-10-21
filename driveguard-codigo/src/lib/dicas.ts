@@ -63,6 +63,13 @@ export const DICAS = {
   acoesRapidas:
     "A resposta da central ao alerta que já tocou na cabine: a pausa e o contato ficam registrados no alerta mais recente e contam como “atendido”.",
   ocorrenciasMotorista: "Acidentes e ocorrências da própria frota registrados para este motorista, com o contexto do momento.",
+  janelaTurnos:
+    "“Agora” é a frota em tempo real. As outras opções mostram os turnos que começaram no intervalo escolhido, já encerrados ou não, com o pico e a média de fadiga de cada um.",
+  picoFadiga: "O maior score de fadiga em uma hora de turno, no intervalo. É o que define a cor do risco nesta visão.",
+  mediaPeriodo: "Score médio de todas as leituras dos turnos do intervalo.",
+  horasPeriodo: "Soma das horas dos turnos que começaram no intervalo.",
+  alertasPeriodo: "Alertas emitidos nos turnos do intervalo, e quantos foram de gravidade alta ou crítica.",
+  turnosPeriodo: "Turnos que começaram no intervalo. Clique em um para ver a curva de fadiga dele.",
 
   // ---------------------------------------------------------------- relatórios
   relatorioAlertas: "Alertas no período e filtros escolhidos; atendidos = graves com ação da central registrada.",

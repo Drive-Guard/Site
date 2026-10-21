@@ -243,6 +243,38 @@
     background-color: var(--color-popover);
     color: var(--color-popover-foreground);
   }
+
+  /*
+   * Mãozinha em tudo que é clicável. O Tailwind v4 deixa o <button> com o
+   * cursor padrão; aqui volta o comportamento esperado, e o desabilitado
+   * mostra que não dá para clicar.
+   */
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="radio"],
+  [role="checkbox"],
+  [role="switch"],
+  [role="option"],
+  [role="menuitem"],
+  [role="combobox"],
+  a[href],
+  summary,
+  select,
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]),
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="date"],
+  input[type="datetime-local"],
+  .recharts-bar-rectangle[cursor="pointer"] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
 }
 
 @layer utilities {

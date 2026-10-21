@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Pencil, RotateCcw } from "lucide-react";
 import { Conteudo } from "@/components/comum/Estado";
+import { Selecao } from "@/components/comum/Selecao";
 import { api } from "@/lib/api";
 import type { Empresa, ParametroRoi, Uf } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
@@ -154,14 +155,7 @@ function FormEmpresa({ empresa, ufs }: { empresa: Empresa; ufs: Uf[] }) {
           <input className={entrada} inputMode="numeric" value={frota} onChange={(e) => setFrota(e.target.value)} />
         </Rotulo>
         <Rotulo texto="UF da sede">
-          <select className={entrada} value={uf} onChange={(e) => setUf(e.target.value)}>
-            <option value="">—</option>
-            {ufs.map((u) => (
-              <option key={u.uf} value={u.uf}>
-                {u.uf}
-              </option>
-            ))}
-          </select>
+          <Selecao valor={uf} aoMudar={setUf} opcoes={[{ valor: "", rotulo: "—" }, ...ufs.map((u) => ({ valor: u.uf, rotulo: u.uf, detalhe: u.nome }))]} />
         </Rotulo>
         <Rotulo texto="Cidade" className="col-span-2">
           <input className={entrada} value={cidade} onChange={(e) => setCidade(e.target.value)} />

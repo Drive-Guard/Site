@@ -1,22 +1,28 @@
 /**
  * Câmeras e veículos. Cada caminhão tem uma câmera; o código da câmera é o
- * código do veículo nos relatórios. Uma câmera que começou a mandar dados sem
- * cadastro aparece como pendente, para ser associada a um veículo. Trocar a
- * câmera de veículo encerra o vínculo anterior: o histórico continua certo.
+ * código do veículo nos relatórios. O jeito rápido de cadastrar os dois (e o
+ * motorista) é o assistente "Colocar câmera em operação"; aqui ficam a lista,
+ * a edição, a troca de veículo e a exclusão. Trocar a câmera de veículo
+ * encerra o vínculo anterior: o histórico continua certo.
  */
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowRightLeft, Camera, History, Pencil, Plus, Unlink } from "lucide-react";
+import { ArrowRightLeft, History, Pencil, Plus, Unlink } from "lucide-react";
 import { Conteudo, Vazio } from "@/components/comum/Estado";
+import { Selecao } from "@/components/comum/Selecao";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { dataHora, relativo, ROTULO_TIPO_VEICULO } from "@/lib/formato";
+import { normalizarDispositivo } from "@/lib/identificadores";
 import type { DispositivoCadastro, VeiculoCadastro, Vinculo } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
-import { BotaoPrimario, BotaoSecundario, celula, entrada, Formulario, linha, numeroOuNulo, Rotulo, Tabela, useSalvar } from "./comum";
+import { BotaoExcluir, BotaoPrimario, BotaoSecundario, CampoId, celula, entrada, Formulario, linha, numeroOuNulo, Rotulo, Tabela, useSalvar } from "./comum";
 
-const CHAVES = [["veiculos"], ["dispositivos"]];
+const CHAVES = [["veiculos"], ["dispositivos"], ["motoristas-ao-vivo"]];
+const TIPOS = Object.entries(ROTULO_TIPO_VEICULO)
+  .filter(([v]) => v !== "nd")
+  .map(([valor, rotulo]) => ({ valor, rotulo }));
 
 export function CamerasVeiculos() {
   const veiculos = useQuery({ queryKey: ["veiculos"], queryFn: () => api.get<VeiculoCadastro[]>("/cadastros/veiculos") });
@@ -26,34 +32,12 @@ export function CamerasVeiculos() {
   const [vincular, setVincular] = useState<DispositivoCadastro | null>(null);
   const [historico, setHistorico] = useState<DispositivoCadastro | null>(null);
 
-  const pendentes = (dispositivos.data ?? []).filter((d) => d.pendente);
   const desvincular = useSalvar((id: string) => api.post(`/cadastros/dispositivos/${id}/desvincular`, { motivo: "câmera retirada" }), CHAVES, "Câmera retirada do veículo");
 
   return (
     <div className="space-y-6">
-      {pendentes.length > 0 && (
-        <div className="rounded-2xl border border-risk-medium/40 bg-risk-medium/10 p-4">
-          <p className="text-sm font-semibold flex items-center gap-2 text-risk-medium">
-            <AlertCircle className="h-4 w-4" /> {pendentes.length} câmera(s) enviando dados sem cadastro
-          </p>
-          <ul className="mt-3 space-y-2">
-            {pendentes.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm rounded-lg bg-background/40 px-3 py-2">
-                <span>
-                  <span className="font-mono">{d.deviceId}</span> • último contato {relativo(d.ultimoContatoEm)}
-                  {d.ultimoMotoristaNome && ` • motorista ${d.ultimoMotoristaCodigo ?? d.ultimoMotoristaNome}`}
-                </span>
-                <BotaoPrimario onClick={() => setVincular(d)} className="text-xs py-1.5">
-                  <Camera className="h-3.5 w-3.5" /> Associar a um veículo
-                </BotaoPrimario>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="glass-card rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div>
             <h3 className="text-base font-semibold">Veículos</h3>
             <p className="text-xs text-muted-foreground">Placa, tipo e a câmera instalada em cada um.</p>
@@ -76,10 +60,17 @@ export function CamerasVeiculos() {
                     <td className={celula}>{v.cameraCodigo ? <span className="font-medium">{v.cameraCodigo}</span> : <span className="text-muted-foreground">sem câmera</span>}</td>
                     <td className={cn(celula, "text-xs")}>{v.cameraDesde ? dataHora(v.cameraDesde) : "—"}</td>
                     <td className={cn(celula, "text-xs")}>{relativo(v.ultimoContatoEm)}</td>
-                    <td className={cn(celula, "text-right")}>
+                    <td className={cn(celula, "text-right whitespace-nowrap space-x-1")}>
                       <BotaoSecundario onClick={() => setEditarVeiculo(v)}>
                         <Pencil className="h-3 w-3" /> Editar
                       </BotaoSecundario>
+                      <BotaoExcluir
+                        caminho={`/cadastros/veiculos/${v.id}`}
+                        nome={`o veículo ${v.placa}`}
+                        temHistorico={v.temHistorico}
+                        chaves={CHAVES}
+                        oQueSomeJunto={`${v.cameraCodigo ? `A câmera ${v.cameraCodigo} sai do veículo. ` : ""}Viagens planejadas com ele são canceladas.`}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -90,21 +81,23 @@ export function CamerasVeiculos() {
       </div>
 
       <div className="glass-card rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div>
             <h3 className="text-base font-semibold">Câmeras</h3>
-            <p className="text-xs text-muted-foreground">O ID gravado no dispositivo e o veículo em que está.</p>
+            <p className="text-xs text-muted-foreground">O ID gravado no dispositivo (DRIVEGUARD_DEVICE_ID) e o veículo em que está.</p>
           </div>
-          <BotaoPrimario onClick={() => setEditarCamera("nova")}>
+          <BotaoSecundario onClick={() => setEditarCamera("nova")} className="px-3 py-2 text-sm">
             <Plus className="h-4 w-4" /> Pré-cadastrar câmera
-          </BotaoPrimario>
+          </BotaoSecundario>
         </div>
         <Conteudo q={dispositivos} altura={200}>
-          {(lista) => (
-            <Tabela cabecalho={["Código", "ID do dispositivo", "Status", "Veículo", "Último contato", ""]}>
-              {lista
-                .filter((d) => !d.pendente)
-                .map((d) => (
+          {(lista) => {
+            const daEmpresa = lista.filter((d) => !d.pendente);
+            return daEmpresa.length === 0 ? (
+              <Vazio>Nenhuma câmera cadastrada.</Vazio>
+            ) : (
+              <Tabela cabecalho={["Código", "ID do dispositivo", "Status", "Veículo", "Último contato", ""]}>
+                {daEmpresa.map((d) => (
                   <tr key={d.id} className={linha}>
                     <td className={cn(celula, "font-medium")}>{d.codigo ?? "—"}</td>
                     <td className={cn(celula, "font-mono text-xs")}>{d.deviceId}</td>
@@ -118,21 +111,23 @@ export function CamerasVeiculos() {
                         <ArrowRightLeft className="h-3 w-3" /> {d.placa ? "Trocar veículo" : "Instalar"}
                       </BotaoSecundario>
                       {d.placa && (
-                        <BotaoSecundario onClick={() => desvincular.mutate(d.id)}>
-                          <Unlink className="h-3 w-3" /> Retirar
+                        <BotaoSecundario onClick={() => desvincular.mutate(d.id)} title="Retirar do veículo">
+                          <Unlink className="h-3 w-3" />
                         </BotaoSecundario>
                       )}
-                      <BotaoSecundario onClick={() => setHistorico(d)}>
+                      <BotaoSecundario onClick={() => setHistorico(d)} title="Histórico de veículos">
                         <History className="h-3 w-3" />
                       </BotaoSecundario>
-                      <BotaoSecundario onClick={() => setEditarCamera(d)}>
+                      <BotaoSecundario onClick={() => setEditarCamera(d)} title="Editar">
                         <Pencil className="h-3 w-3" />
                       </BotaoSecundario>
+                      <BotaoExcluir caminho={`/cadastros/dispositivos/${d.id}`} nome={`a câmera ${d.codigo ?? d.deviceId}`} temHistorico={d.temHistorico} chaves={CHAVES} />
                     </td>
                   </tr>
                 ))}
-            </Tabela>
-          )}
+              </Tabela>
+            );
+          }}
         </Conteudo>
       </div>
 
@@ -153,8 +148,8 @@ function FormVeiculo({ veiculo, aoFechar }: { veiculo: VeiculoCadastro | null; a
   const [ativo, setAtivo] = useState(veiculo?.ativo ?? true);
   const salvar = useSalvar(
     () => {
-      const dados = { tipo, modelo: modelo || null, anoFabricacao: numeroOuNulo(ano), capacidadePassageiros: numeroOuNulo(capacidade), ativo };
-      return veiculo ? api.put(`/cadastros/veiculos/${veiculo.id}`, dados) : api.post("/cadastros/veiculos", { ...dados, placa });
+      const dados = { placa, tipo, modelo: modelo || null, anoFabricacao: numeroOuNulo(ano), capacidadePassageiros: numeroOuNulo(capacidade), ativo };
+      return veiculo ? api.put(`/cadastros/veiculos/${veiculo.id}`, dados) : api.post("/cadastros/veiculos", dados);
     },
     CHAVES,
     veiculo ? "Veículo atualizado" : "Veículo cadastrado",
@@ -164,16 +159,10 @@ function FormVeiculo({ veiculo, aoFechar }: { veiculo: VeiculoCadastro | null; a
     <Formulario titulo={veiculo ? `Editar ${veiculo.placa}` : "Novo veículo"} aberto aoFechar={aoFechar} aoSalvar={() => salvar.mutate(undefined)} salvando={salvar.isPending}>
       <div className="grid grid-cols-2 gap-3">
         <Rotulo texto="Placa">
-          <input className={entrada} value={placa} onChange={(e) => setPlaca(e.target.value.toUpperCase())} disabled={!!veiculo} placeholder="ABC1D23" required />
+          <input className={cn(entrada, "font-mono")} value={placa} onChange={(e) => setPlaca(e.target.value.toUpperCase())} placeholder="ABC1D23" required />
         </Rotulo>
         <Rotulo texto="Tipo">
-          <select className={entrada} value={tipo} onChange={(e) => setTipo(e.target.value)}>
-            {Object.entries(ROTULO_TIPO_VEICULO).map(([v, r]) => (
-              <option key={v} value={v}>
-                {r}
-              </option>
-            ))}
-          </select>
+          <Selecao valor={tipo} aoMudar={setTipo} opcoes={TIPOS} />
         </Rotulo>
         <Rotulo texto="Modelo" className="col-span-2">
           <input className={entrada} value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="Volvo FH 540" />
@@ -199,29 +188,38 @@ function FormCamera({ camera, aoFechar }: { camera: DispositivoCadastro | null; 
   const [codigo, setCodigo] = useState(camera?.codigo ?? "");
   const [descricao, setDescricao] = useState(camera?.descricao ?? "");
   const [status, setStatus] = useState(camera?.status ?? "ativo");
+  const mudouId = !!camera && normalizarDispositivo(deviceId) !== camera.deviceId;
   const salvar = useSalvar(
-    () => (camera ? api.put(`/cadastros/dispositivos/${camera.id}`, { codigo, descricao: descricao || null, status }) : api.post("/cadastros/dispositivos", { deviceId, codigo, descricao: descricao || null })),
+    () =>
+      camera
+        ? api.put(`/cadastros/dispositivos/${camera.id}`, { deviceId, codigo: codigo || camera.deviceId, descricao: descricao || null, status })
+        : api.post("/cadastros/dispositivos", { deviceId, codigo: codigo || null, descricao: descricao || null }),
     CHAVES,
     camera ? "Câmera atualizada" : "Câmera cadastrada",
     aoFechar,
   );
   return (
     <Formulario titulo={camera ? `Câmera ${camera.deviceId}` : "Pré-cadastrar câmera"} aberto aoFechar={aoFechar} aoSalvar={() => salvar.mutate(undefined)} salvando={salvar.isPending}>
-      <Rotulo texto="ID gravado no dispositivo">
-        <input className={entrada} value={deviceId} onChange={(e) => setDeviceId(e.target.value)} disabled={!!camera} placeholder="dg-edge-0017" required />
+      <Rotulo texto="ID gravado no dispositivo (DRIVEGUARD_DEVICE_ID)">
+        <CampoId valor={deviceId} aoMudar={setDeviceId} placeholder="dg-edge-0017" minusculo obrigatorio />
       </Rotulo>
-      <Rotulo texto="Código do veículo nos relatórios">
-        <input className={entrada} value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="TRK-1057" required />
+      {mudouId && <p className="text-[11px] text-risk-medium">Trocar o ID exige gravar DRIVEGUARD_DEVICE_ID={normalizarDispositivo(deviceId)} na câmera.</p>}
+      <Rotulo texto="Código do veículo nos relatórios" ajuda={!camera ? "Se ficar vazio, usa o ID do dispositivo." : undefined}>
+        <input className={entrada} value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="TRK-1057" />
       </Rotulo>
       <Rotulo texto="Descrição">
         <input className={entrada} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Câmera IR embarcada" />
       </Rotulo>
       {camera && (
         <Rotulo texto="Status">
-          <select className={entrada} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="ativo">Ativa</option>
-            <option value="inativo">Inativa (retira do veículo)</option>
-          </select>
+          <Selecao
+            valor={status}
+            aoMudar={setStatus}
+            opcoes={[
+              { valor: "ativo", rotulo: "Ativa" },
+              { valor: "inativo", rotulo: "Inativa", detalhe: "retira do veículo" },
+            ]}
+          />
         </Rotulo>
       )}
     </Formulario>
@@ -230,35 +228,40 @@ function FormCamera({ camera, aoFechar }: { camera: DispositivoCadastro | null; 
 
 function FormVinculo({ camera, veiculos, aoFechar }: { camera: DispositivoCadastro; veiculos: VeiculoCadastro[]; aoFechar: () => void }) {
   const [veiculoId, setVeiculoId] = useState("");
-  const [codigo, setCodigo] = useState(camera.codigo ?? "");
   const [motivo, setMotivo] = useState("");
   const salvar = useSalvar(
-    async () => {
-      // Câmera pendente: primeiro ganha código (vira da empresa), depois é instalada.
-      if (camera.pendente || camera.codigo !== codigo) await api.post("/cadastros/dispositivos", { deviceId: camera.deviceId, codigo });
-      return api.post(`/cadastros/dispositivos/${camera.id}/vincular`, { veiculoId, motivo: motivo || null });
-    },
-    [...CHAVES, ["motoristas-ao-vivo"]],
+    () => api.post(`/cadastros/dispositivos/${camera.id}/vincular`, { veiculoId, motivo: motivo || null }),
+    CHAVES,
     "Câmera instalada no veículo",
     aoFechar,
   );
   const alvo = veiculos.find((v) => v.id === veiculoId);
   return (
-    <Formulario titulo={`Instalar a câmera ${camera.deviceId}`} aberto aoFechar={aoFechar} aoSalvar={() => salvar.mutate(undefined)} salvando={salvar.isPending} textoSalvar="Instalar">
-      <Rotulo texto="Código do veículo nos relatórios">
-        <input className={entrada} value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="TRK-1057" required />
-      </Rotulo>
+    <Formulario
+      titulo={`Instalar a câmera ${camera.codigo ?? camera.deviceId}`}
+      aberto
+      aoFechar={aoFechar}
+      aoSalvar={() => (veiculoId ? salvar.mutate(undefined) : undefined)}
+      salvando={salvar.isPending}
+      textoSalvar="Instalar"
+    >
       <Rotulo texto="Veículo">
-        <select className={entrada} value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} required>
-          <option value="">Escolha…</option>
-          {veiculos
+        <Selecao
+          valor={veiculoId}
+          aoMudar={setVeiculoId}
+          placeholder="Escolha o veículo…"
+          opcoes={veiculos
             .filter((v) => v.ativo && v.id !== camera.veiculoId)
-            .map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.placa} • {ROTULO_TIPO_VEICULO[v.tipo]} {v.cameraCodigo ? `(hoje com ${v.cameraCodigo})` : "(sem câmera)"}
-              </option>
-            ))}
-        </select>
+            .map((v) => ({
+              valor: v.id,
+              rotulo: (
+                <span>
+                  <span className="font-mono">{v.placa}</span> · {ROTULO_TIPO_VEICULO[v.tipo]}
+                </span>
+              ),
+              detalhe: v.cameraCodigo ? `hoje com ${v.cameraCodigo}` : "sem câmera",
+            }))}
+        />
       </Rotulo>
       {alvo?.cameraCodigo && <p className="text-xs text-risk-medium">A câmera {alvo.cameraCodigo} será retirada desse veículo.</p>}
       {camera.placa && <p className="text-xs text-muted-foreground">Hoje ela está no {camera.placa}; esse vínculo será encerrado agora.</p>}
