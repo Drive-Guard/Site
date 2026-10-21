@@ -64,7 +64,7 @@ export default function Monitoramento() {
   const tempoReal = useQuery({
     queryKey: ["tempo-real", consultaTempoReal],
     queryFn: () => api.get<TempoReal>("/dashboard/alertas-tempo-real", consultaTempoReal),
-    refetchInterval: 30_000,
+    refetchInterval: 5_000,
   });
   // Tela do "agora": cada gráfico tem a própria janela (sem o período global).
   const dimensoes = { regiao: query.regiao, tipo_veiculo: query.tipo_veiculo };

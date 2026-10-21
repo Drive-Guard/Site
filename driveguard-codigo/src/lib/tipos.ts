@@ -34,6 +34,10 @@ export interface Kpis {
     alertas: number;
     alertasAnterior: number;
     variacaoAlertas: number | null;
+    /** Alertas por 100 h ao volante (compara períodos com a frota mudando de tamanho). */
+    alertasPor100h: number | null;
+    alertasPor100hAnterior: number | null;
+    variacaoAlertasPor100h: number | null;
     alertasGraves: number;
     turnos: number;
     horasDirigidas: number;
@@ -346,6 +350,13 @@ export interface MotoristaDetalhe {
   }[];
   /** Alerta aberto (2 h) que a próxima ação da central responde. */
   alertaAberto: { id: string; rotulo: string; gravidade: string; disparadoEm: string; score: number | null } | null;
+}
+
+/** Leituras dos últimos minutos, uma a uma (gráfico "agora" do painel do motorista). */
+export interface LeiturasRecentes {
+  minutos: number;
+  leituras: { em: string; score: number | null; estado: string; perclos: number | null; ear: number | null; blinkRate: number | null }[];
+  alertas: { id: string; em: string; tipo: string; rotulo: string; gravidade: string; score: number | null; status: string }[];
 }
 
 export interface CurvaTurno {

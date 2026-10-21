@@ -38,7 +38,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Area, AreaChart, CartesianGrid, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Conteudo, Vazio } from "@/components/comum/Estado";
 import { Selecao } from "@/components/comum/Selecao";
 import { SeletorIntervalo } from "@/components/comum/SeletorIntervalo";
@@ -48,7 +48,7 @@ import { useFiltros } from "@/lib/filtros";
 import { escreverParametros, useParametros } from "@/lib/navegacao";
 import { dataHora, diaIso, hora, num, relativo } from "@/lib/formato";
 import { ANEL_RISCO, CHIP_RISCO, COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP, PONTO_RISCO, ROTULO_RISCO } from "@/lib/risco";
-import type { CurvaTurno, InsightMotorista, MotoristaAoVivo, MotoristaDetalhe, MotoristaHistorico, TurnoResumo } from "@/lib/tipos";
+import type { CurvaTurno, InsightMotorista, LeiturasRecentes, MotoristaAoVivo, MotoristaDetalhe, MotoristaHistorico, TurnoResumo } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 import { ChartCard } from "./ChartCard";
 import { Filters } from "./Filters";
@@ -233,7 +233,7 @@ function MotoristasAoVivo() {
   const rota = url.get("rota");
   const codigo = url.get("codigo");
 
-  const lista = useQuery({ queryKey: ["motoristas-ao-vivo", query], queryFn: () => api.get<MotoristaAoVivo[]>("/motoristas/ao-vivo", query), refetchInterval: 30_000 });
+  const lista = useQuery({ queryKey: ["motoristas-ao-vivo", query], queryFn: () => api.get<MotoristaAoVivo[]>("/motoristas/ao-vivo", query), refetchInterval: 5_000 });
   const todos = lista.data ?? [];
   // ?codigo=DRV-1013 (links dos insights) vira o id do motorista.
   const selecionado = url.get("motorista") ?? (codigo ? todos.find((m) => m.codigo === codigo)?.motoristaId ?? null : null);
@@ -432,6 +432,65 @@ function GraficoCurva({ curva }: { curva: CurvaTurno }) {
   );
 }
 
+/**
+ * Os últimos 15 minutos, leitura a leitura, atualizando a cada 5 s: o que a
+ * câmera acabou de mandar (a curva do turno é por hora e vem da Gold).
+ */
+function GraficoAgora({ id }: { id: string }) {
+  const q = useQuery({
+    queryKey: ["leituras-recentes", id],
+    queryFn: () => api.get<LeiturasRecentes>(`/motoristas/${id}/leituras-recentes`, { minutos: 15 }),
+    refetchInterval: 5_000,
+  });
+  const dados = (q.data?.leituras ?? []).map((l) => ({ t: new Date(l.em).getTime(), score: l.score, perclos: l.perclos !== null ? Math.round(l.perclos * 100) : null }));
+  const ultima = q.data?.leituras.at(-1);
+  // Uma marca a cada 2 minutos cheios (o eixo de tempo repetiria o mesmo minuto).
+  const marcas: number[] = [];
+  if (dados.length) {
+    const passo = 2 * 60_000;
+    for (let t = Math.ceil(dados[0].t / passo) * passo; t <= dados[dados.length - 1].t; t += passo) marcas.push(t);
+  }
+  return (
+    <ChartCard
+      title="Agora, leitura a leitura"
+      info={DICAS.leiturasAgora}
+      subtitle={ultima ? `Últimos ${q.data!.minutos} min • atualiza a cada 5 s • última leitura ${relativo(ultima.em)}` : "Últimos 15 min"}
+      action={
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-risk-low/30 bg-risk-low/10 px-2 py-0.5 text-[11px] font-medium text-risk-low">
+          <span className="h-1.5 w-1.5 rounded-full bg-risk-low pulse-dot" /> ao vivo
+        </span>
+      }
+    >
+      <Conteudo q={q} altura={220}>
+        {(r) =>
+          r.leituras.length === 0 ? (
+            <Vazio>Sem leitura nos últimos {r.minutos} minutos.</Vazio>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={dados} margin={{ top: 18, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={COR.grade} />
+                <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time" ticks={marcas} stroke={COR.eixo} fontSize={11} tickFormatter={(t: number) => hora(new Date(t).toISOString())} />
+                <YAxis stroke={COR.eixo} fontSize={12} domain={[0, 100]} />
+                <Tooltip
+                  contentStyle={ESTILO_TOOLTIP}
+                  labelFormatter={(t: number) => new Date(t).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                  formatter={(v: number, n: string) => [n === "score" ? num(v, 0) : `${v}%`, n === "score" ? "Score de fadiga" : "Olhos fechados (PERCLOS)"]}
+                />
+                <ReferenceLine y={70} stroke={COR.risco} strokeDasharray="4 4" label={{ value: "Sonolento", fill: COR.risco, fontSize: 11, position: "insideTopLeft" }} />
+                {r.alertas.map((a) => (
+                  <ReferenceLine key={a.id} x={new Date(a.em).getTime()} stroke={COR.risco} label={{ value: a.rotulo, fill: COR.risco, fontSize: 10, position: "top" }} />
+                ))}
+                <Line type="monotone" dataKey="score" stroke={COR.primaria} strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls />
+                <Line type="monotone" dataKey="perclos" stroke={COR.neutro} strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          )
+        }
+      </Conteudo>
+    </ChartCard>
+  );
+}
+
 function CabecalhoMotorista({ d, rotulo, aoLimpar }: { d: MotoristaDetalhe | undefined; rotulo: string; aoLimpar: () => void }) {
   return (
     <div className="glass-card rounded-xl p-4 flex items-center justify-between gap-3">
@@ -481,10 +540,12 @@ function ListaOcorrencias({ ocorrencias }: { ocorrencias: MotoristaDetalhe["ocor
 }
 
 function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void }) {
-  const detalhe = useQuery({ queryKey: ["motorista", id], queryFn: () => api.get<MotoristaDetalhe>(`/motoristas/${id}`), refetchInterval: 30_000 });
+  const detalhe = useQuery({ queryKey: ["motorista", id], queryFn: () => api.get<MotoristaDetalhe>(`/motoristas/${id}`), refetchInterval: 5_000 });
   const curva = useQuery({ queryKey: ["curva", id], queryFn: () => api.get<CurvaTurno>(`/motoristas/${id}/curva-turno`), refetchInterval: 60_000 });
   const insights = useQuery({ queryKey: ["insights-motorista", id], queryFn: () => api.get<InsightMotorista[]>(`/motoristas/${id}/insights`), refetchInterval: 60_000 });
   const d = detalhe.data;
+  // Dirigindo agora (leitura nos últimos 30 min): o gráfico leitura a leitura.
+  const aoVivo = !!d?.agora?.ultimaLeituraEm && Date.now() - new Date(d.agora.ultimaLeituraEm).getTime() < 30 * 60_000;
 
   return (
     <>
@@ -517,6 +578,8 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
           carregando={detalhe.isLoading}
         />
       </div>
+
+      {aoVivo && <GraficoAgora id={id} />}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <ChartCard

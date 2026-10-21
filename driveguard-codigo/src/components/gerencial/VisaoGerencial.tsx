@@ -37,7 +37,7 @@ import { DICAS } from "@/lib/dicas";
 
 export function useKpis() {
   const { query } = useFiltros();
-  return useQuery({ queryKey: ["kpis", query], queryFn: () => api.get<Kpis>("/dashboard/kpis", query), refetchInterval: 30_000 });
+  return useQuery({ queryKey: ["kpis", query], queryFn: () => api.get<Kpis>("/dashboard/kpis", query), refetchInterval: 10_000 });
 }
 
 export default function VisaoGerencial() {
@@ -157,7 +157,8 @@ export default function VisaoGerencial() {
             <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
               {k && (
                 <>
-                  {rotuloPeriodo}: {num(k.periodo.turnos)} turnos, {num(k.periodo.horasDirigidas)} h ao volante e {num(k.periodo.alertas)} alertas ({num(k.periodo.alertasGraves)} graves).{" "}
+                  {rotuloPeriodo}: {num(k.periodo.turnos)} turnos, {num(k.periodo.horasDirigidas)} h ao volante e {num(k.periodo.alertas)} alertas ({num(k.periodo.alertasGraves)} graves
+                  {k.periodo.alertasPor100h !== null ? `; ${num(k.periodo.alertasPor100h, 1)} por 100 h` : ""}).{" "}
                   {k.periodo.variacaoFadiga !== null && Math.abs(k.periodo.variacaoFadiga) < 1 && <>A fadiga ficou estável em relação ao período anterior. </>}
                   {k.periodo.variacaoFadiga !== null && Math.abs(k.periodo.variacaoFadiga) >= 1 && (
                     <>
@@ -236,7 +237,7 @@ export default function VisaoGerencial() {
 
       <footer className="pt-2 pb-8 flex items-center gap-2 text-xs text-muted-foreground">
         <TrendingDown className="h-3.5 w-3.5 text-risk-low" />
-        Dados da frota atualizados a cada 5 minutos (views Gold) • estado ao vivo a cada 30 s
+        Dados da frota atualizados a cada 5 minutos (views Gold) • estado ao vivo a cada 10 s
       </footer>
     </>
   );

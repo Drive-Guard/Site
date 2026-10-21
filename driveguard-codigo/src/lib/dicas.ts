@@ -60,6 +60,8 @@ export const DICAS = {
   media30d: "Média do score do motorista nos últimos 30 dias, comparada com a média da frota, e a posição dele no ranking de risco.",
   curvaTurno: "Score do motorista ao longo do turno atual (ou do último). O tracejado é a média da frota no mesmo período.",
   insightsMotorista: "Regras sobre o estado atual e os últimos 30 dias: fadiga acima do limite, turno longo, sinais de microssono, reincidência e acidentes recentes.",
+  leiturasAgora:
+    "O que a câmera do motorista mandou nos últimos 15 minutos, leitura a leitura (uma por segundo no veículo), atualizando a cada 5 s. A linha cheia é o score de fadiga; a tracejada, a porcentagem do tempo com olhos fechados (PERCLOS). As linhas vermelhas verticais são os alertas emitidos na cabine.",
   acoesRapidas:
     "O que a central fez com o motorista, com as mesmas opções da resposta a um alerta. Se há um alerta aguardando (das últimas 2 h), a ação responde a ele: falar com ele, mandar parar e descansar, outro motorista assumir ou parar de dirigir hoje contam como alerta atendido. Treinamento e advertência ficam só no histórico do motorista. Dá para desfazer em até 15 minutos.",
   ocorrenciasMotorista: "Acidentes e ocorrências da própria frota registrados para este motorista, com o contexto do momento.",

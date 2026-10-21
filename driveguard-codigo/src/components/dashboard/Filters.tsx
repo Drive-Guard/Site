@@ -84,7 +84,7 @@ export function Filters({
         {ao_vivo && (
           <div className="flex items-center gap-2 text-xs text-risk-low font-medium px-3 py-2 rounded-lg bg-risk-low/10 border border-risk-low/30">
             <span className="h-2 w-2 rounded-full bg-risk-low pulse-dot" />
-            {periodo ? "Ao vivo • atualiza a cada 30 s" : "Tempo real • atualiza a cada 30 s"}
+            {periodo ? "Ao vivo • atualiza a cada 10 s" : "Tempo real • atualiza a cada 5 s"}
             {!periodo && <Dica texto={DICAS.telaAoVivo} />}
           </div>
         )}
