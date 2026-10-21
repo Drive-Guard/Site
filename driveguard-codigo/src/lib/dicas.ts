@@ -42,7 +42,7 @@ export const DICAS = {
     "Esta tela mostra o agora: cada quadro tem a própria janela de tempo (indicada no subtítulo). Região e tipo de veículo continuam valendo.",
   motoristasRisco: "Quem está sonolento agora (score a partir de 70), do maior para o menor score. Clique para abrir o motorista.",
   alertasRecentes:
-    "Alertas emitidos na cabine na janela escolhida (6 h, 24 h ou 30 dias). Reconhecer = a central viu; resolver = a situação foi tratada.",
+    "Alertas emitidos na cabine na janela escolhida (6 h, 24 h ou 30 dias). Em “Responder”, registre o que a central fez: pedir pausa, ligar ou mandar encerrar o turno contam como alerta atendido (o indicador da Visão Gerencial e dos relatórios); “falso alarme” tira o alerta da conta. Graves sem resposta ficam destacados.",
   tendenciaTurno:
     "Score médio da frota em cada hora do turno (1ª hora, 2ª hora...), nos últimos 7 dias. Mostra a partir de que hora ao volante a fadiga passa do limite.",
   heatmap:

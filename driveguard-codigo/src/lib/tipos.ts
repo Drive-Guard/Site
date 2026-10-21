@@ -71,11 +71,15 @@ export interface EventoAlerta {
   codigo: string | null;
   nome: string;
   motoristaId: string;
+  /** O que a central fez com o alerta (null = ainda sem resposta). */
+  resposta: { tipo: string; em: string | null; por: string | null } | null;
 }
 
 export interface TempoReal {
   motoristas: MotoristaTempoReal[];
   eventos: EventoAlerta[];
+  /** Graves da janela: quantos tiveram resposta e quantos esperam. */
+  respostas: { graves: number; atendidos: number; aguardando: number; descartados: number; aguardandoDesde: string | null };
   /** Janela dos alertas: 6 h por padrão; os atalhos pedem 24 h ou 30 dias. */
   janela: { horas: number; graves: boolean };
 }

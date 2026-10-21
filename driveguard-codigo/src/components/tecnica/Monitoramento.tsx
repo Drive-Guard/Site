@@ -3,12 +3,12 @@
  * agora e como a fadiga se comporta ao longo do turno.
  *
  * O alerta acontece na cabine, em tempo real, no dispositivo embarcado. Aqui a
- * central vê o registro e o trata (reconhecer, resolver, registrar pausa).
+ * central vê o registro e responde com o que fez (pausa, ligação, encerrar o
+ * turno ou falso alarme), o que alimenta o indicador de alertas atendidos.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Brain, Check, CheckCheck, Eye, Gauge, Users, X } from "lucide-react";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { Activity, AlertTriangle, Brain, Eye, Gauge, Users, X } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -31,7 +31,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RealtimeAlerts } from "@/components/dashboard/RealtimeAlerts";
 import { Conteudo, Vazio } from "@/components/comum/Estado";
 import { useKpis } from "@/components/gerencial/VisaoGerencial";
-import { api, mensagemDeErro } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useFiltros } from "@/lib/filtros";
 import { escreverParametros, useIrPara, useParametros } from "@/lib/navegacao";
 import { dataHora, hora, num } from "@/lib/formato";
@@ -39,6 +39,7 @@ import { COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP } from "@/lib/risco";
 import type { PontoFadigaTempo, TempoReal, TendenciaTurno } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
 import { DICAS } from "@/lib/dicas";
+import { RespostaAlerta, ResumoRespostas } from "./RespostaAlerta";
 
 const ROTULO_GRAVIDADE: Record<string, string> = { critica: "Crítica", alta: "Alta", media: "Média", baixa: "Baixa" };
 
@@ -52,7 +53,6 @@ const COR_GRAVIDADE: Record<string, string> = {
 export default function Monitoramento() {
   const { query } = useFiltros();
   const kpis = useKpis();
-  const cliente = useQueryClient();
   const irPara = useIrPara();
   // Janela dos alertas: 6 h por padrão; os atalhos pedem 24 h ou 30 dias (só graves).
   const url = useParametros();
@@ -72,15 +72,6 @@ export default function Monitoramento() {
   const q30 = { ...dimensoes, periodo: "30d" };
   const tendencia = useQuery({ queryKey: ["tendencia", q7], queryFn: () => api.get<TendenciaTurno>("/dashboard/tendencia-turno", q7) });
   const tempoDirecao = useQuery({ queryKey: ["fadiga-tempo", q30], queryFn: () => api.get<PontoFadigaTempo[]>("/dashboard/fadiga-tempo-direcao", q30) });
-
-  const tratar = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => api.patch(`/alertas/${id}`, { status }),
-    onSuccess: () => {
-      toast.success("Alerta atualizado");
-      cliente.invalidateQueries({ queryKey: ["tempo-real"] });
-    },
-    onError: (e) => toast.error(mensagemDeErro(e)),
-  });
 
   const k = kpis.data;
   const t = tendencia.data;
@@ -153,7 +144,7 @@ export default function Monitoramento() {
 
         <ChartCard
           title="Alertas recentes" info={DICAS.alertasRecentes}
-          subtitle={`${rotuloJanela}${soGraves ? " • só graves" : ""} • reconheça ou resolva`}
+          subtitle={`${rotuloJanela}${soGraves ? " • só graves" : ""} • responda com o que a central fez`}
           className="xl:col-span-2 scroll-mt-24"
           action={
             <div id="alertas-recentes" className="flex items-center gap-1 text-xs">
@@ -182,6 +173,8 @@ export default function Monitoramento() {
               d.eventos.length === 0 ? (
                 <Vazio>Nenhum alerta {soGraves ? "grave " : ""}na janela ({rotuloJanela.toLowerCase()}).</Vazio>
               ) : (
+                <>
+                <ResumoRespostas r={d.respostas} />
                 <div className="max-h-[420px] overflow-auto">
                   <table className="w-full text-sm">
                     <thead className="text-xs text-muted-foreground sticky top-0 bg-card">
@@ -191,12 +184,12 @@ export default function Monitoramento() {
                         <th className="py-2 pr-2 font-medium">Sinal</th>
                         <th className="py-2 pr-2 font-medium">Gravidade</th>
                         <th className="py-2 pr-2 font-medium text-right">Score</th>
-                        <th className="py-2 font-medium text-right">Ação</th>
+                        <th className="py-2 font-medium text-right">Resposta da central</th>
                       </tr>
                     </thead>
                     <tbody>
                       {d.eventos.map((e) => (
-                        <tr key={e.id} className="border-t border-border">
+                        <tr key={e.id} className={cn("border-t border-border", !e.resposta && (e.gravidade === "alta" || e.gravidade === "critica") && "bg-risk-high/5")}>
                           <td className="py-2 pr-2 font-mono text-xs whitespace-nowrap">{horas > 24 ? dataHora(e.disparadoEm) : hora(e.disparadoEm)}</td>
                           <td className="py-2 pr-2">
                             <button
@@ -212,24 +205,14 @@ export default function Monitoramento() {
                           <td className={cn("py-2 pr-2 font-medium", COR_GRAVIDADE[e.gravidade])}>{ROTULO_GRAVIDADE[e.gravidade] ?? e.gravidade}</td>
                           <td className="py-2 pr-2 text-right">{num(e.score, 0)}</td>
                           <td className="py-2 text-right whitespace-nowrap">
-                            {e.status === "aberto" ? (
-                              <div className="inline-flex gap-1">
-                                <button onClick={() => tratar.mutate({ id: e.id, status: "reconhecido" })} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border hover:bg-secondary/60">
-                                  <Check className="h-3 w-3" /> Reconhecer
-                                </button>
-                                <button onClick={() => tratar.mutate({ id: e.id, status: "resolvido" })} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border hover:bg-secondary/60">
-                                  <CheckCheck className="h-3 w-3" /> Resolver
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">{e.status}</span>
-                            )}
+                            <RespostaAlerta evento={e} />
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                </>
               )
             }
           </Conteudo>
