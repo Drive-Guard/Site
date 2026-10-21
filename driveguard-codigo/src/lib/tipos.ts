@@ -71,8 +71,27 @@ export interface EventoAlerta {
   codigo: string | null;
   nome: string;
   motoristaId: string;
-  /** O que a central fez com o alerta (null = ainda sem resposta). */
-  resposta: { tipo: string; em: string | null; por: string | null } | null;
+  /** A resposta mais recente da central (null = ainda sem resposta). */
+  resposta: RespostaDoAlerta | null;
+  /** Todas as respostas, em ordem (não atendeu -> pausa...). */
+  historico: RespostaDoAlerta[];
+  /** Alguma resposta conta como atendido (contato, pausa, troca, encerramento). */
+  atendido: boolean;
+  /** Tentativas de contato sem sucesso. */
+  tentativas: number;
+}
+
+export interface RespostaDoAlerta {
+  /** Id da ação, "falso_alarme" ou null (só "visto", sem ação registrada). */
+  id: string | null;
+  tipo: string;
+  /** Opção escolhida (30 min, rádio...) ou o motivo do falso alarme. */
+  detalhe: string | null;
+  observacao: string | null;
+  em: string | null;
+  por: string | null;
+  /** Ainda dentro dos 15 min para desfazer. */
+  podeDesfazer: boolean;
 }
 
 export interface TempoReal {

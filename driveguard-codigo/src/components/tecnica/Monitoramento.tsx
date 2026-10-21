@@ -189,7 +189,7 @@ export default function Monitoramento() {
                     </thead>
                     <tbody>
                       {d.eventos.map((e) => (
-                        <tr key={e.id} className={cn("border-t border-border", !e.resposta && (e.gravidade === "alta" || e.gravidade === "critica") && "bg-risk-high/5")}>
+                        <tr key={e.id} className={cn("border-t border-border", e.status === "aberto" && (e.gravidade === "alta" || e.gravidade === "critica") && "bg-risk-high/5")}>
                           <td className="py-2 pr-2 font-mono text-xs whitespace-nowrap">{horas > 24 ? dataHora(e.disparadoEm) : hora(e.disparadoEm)}</td>
                           <td className="py-2 pr-2">
                             <button
@@ -205,7 +205,7 @@ export default function Monitoramento() {
                           <td className={cn("py-2 pr-2 font-medium", COR_GRAVIDADE[e.gravidade])}>{ROTULO_GRAVIDADE[e.gravidade] ?? e.gravidade}</td>
                           <td className="py-2 pr-2 text-right">{num(e.score, 0)}</td>
                           <td className="py-2 text-right whitespace-nowrap">
-                            <RespostaAlerta evento={e} />
+                            <RespostaAlerta evento={e} outrosAbertos={d.eventos.filter((o) => o.motoristaId === e.motoristaId && o.id !== e.id && o.status === "aberto").length} />
                           </td>
                         </tr>
                       ))}
