@@ -424,8 +424,9 @@ function Historico() {
                         ) : r.envio === "pendente" ? (
                           <span className="text-muted-foreground">enviando…</span>
                         ) : (
-                          <span className="text-risk-medium" title={r.envio_erro ?? ""}>
-                            não enviado (disponível aqui)
+                          <span className="block max-w-[16rem]" title={r.envio_erro ?? ""}>
+                            <span className="text-risk-medium">não enviado (disponível aqui)</span>
+                            {r.envio_erro && <span className="block text-[11px] leading-snug text-muted-foreground">{r.envio_erro.replace(/\s*O relatório está disponível na dashboard\.?$/, "")}</span>}
                           </span>
                         )}
                       </td>
