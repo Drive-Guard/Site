@@ -77,7 +77,8 @@ export function ImpactoRoi() {
                 {roi.alertasAtendidos30d.percentual !== null && (
                   <button
                     type="button"
-                    onClick={() => irPara("monitoramento", { horas: 720, gravidade: "graves" })}
+                    // O ROI é da empresa inteira: abre sem região e tipo, para os números baterem.
+                    onClick={() => irPara("monitoramento", { horas: 720, gravidade: "graves", regiao: null, tipo_veiculo: null })}
                     title="Ver os alertas graves dos últimos 30 dias"
                     className="clicavel mt-3 w-full text-left rounded-lg border border-border px-3 py-2 text-[11px] text-muted-foreground"
                   >

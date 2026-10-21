@@ -550,6 +550,8 @@ export interface MotoristaHistorico {
   ocorrencias: number;
   ultimoTurnoEm: string;
   ultimoTurnoId: string;
+  /** "Origem → Destino" das rotas feitas no intervalo. */
+  rotas: string[];
 }
 
 export interface TurnoResumo {

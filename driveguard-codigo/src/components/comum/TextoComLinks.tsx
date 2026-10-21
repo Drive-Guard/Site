@@ -20,7 +20,8 @@ export function TextoComLinks({ texto }: { texto: string }) {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              irPara("motoristas", { codigo: parte, filtro: "todos" });
+              // O motorista pode ser de outra região ou tipo que os do filtro: abre sem eles.
+              irPara("motoristas", { codigo: parte, filtro: "todos", regiao: null, tipo_veiculo: null });
             }}
             className="font-mono font-medium text-primary underline-offset-2 hover:underline"
             title={`Abrir ${parte}`}

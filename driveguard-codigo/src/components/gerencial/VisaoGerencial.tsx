@@ -2,10 +2,16 @@
  * Visão gerencial (admin e gestor): o resumo do período para quem decide.
  *
  * Cada número leva ao detalhe já filtrado (lib/navegacao.tsx), em vez de
- * empilhar tudo aqui: em risco -> Motoristas (em risco), alertas 24h ->
- * Monitoramento (24 h), horário crítico -> Relatórios (faixa do dia),
- * acidentes -> Motoristas (com ocorrência), rota -> Motoristas da rota,
- * código de motorista nos insights -> painel do motorista.
+ * empilhar tudo aqui. Região e tipo de veículo sempre vão junto; a janela de
+ * tempo é a do número: o que é "agora" abre Motoristas ao vivo, o que é do
+ * período abre os turnos do mesmo período (janelaDoPeriodo).
+ *   em risco agora      -> Motoristas ao vivo, em risco
+ *   fadiga média        -> turnos do período, pela fadiga média
+ *   alertas 24h         -> Monitoramento (24 h)
+ *   horário crítico     -> Relatórios (faixa do dia)
+ *   acidentes           -> turnos do período, com ocorrência
+ *   rota                -> turnos do período naquela rota
+ *   código nos insights -> painel do motorista
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -18,7 +24,7 @@ import { RiskRoutesList } from "@/components/dashboard/RiskRoutesList";
 import { Conteudo } from "@/components/comum/Estado";
 import { TextoComLinks } from "@/components/comum/TextoComLinks";
 import { api } from "@/lib/api";
-import { useFiltros } from "@/lib/filtros";
+import { janelaDoPeriodo, useFiltros } from "@/lib/filtros";
 import { faixaDaHora, useIrPara } from "@/lib/navegacao";
 import { diaMes, num, variacao } from "@/lib/formato";
 import { COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP } from "@/lib/risco";
@@ -35,12 +41,14 @@ export function useKpis() {
 }
 
 export default function VisaoGerencial() {
-  const { query, rotuloPeriodo } = useFiltros();
+  const { query, rotuloPeriodo, filtros } = useFiltros();
   const kpis = useKpis();
   const evolucao = useQuery({ queryKey: ["evolucao", query], queryFn: () => api.get<EvolucaoFadiga>("/dashboard/evolucao-fadiga", query) });
   const rotas = useQuery({ queryKey: ["rotas", query], queryFn: () => api.get<RotaDesempenho[]>("/dashboard/rotas", query) });
   const insights = useInsights();
   const irPara = useIrPara();
+  const agora = (filtro: string) => irPara("motoristas", { filtro });
+  const doPeriodo = (extra: Record<string, string>) => irPara("motoristas", { ...janelaDoPeriodo(filtros), ...extra });
 
   const k = kpis.data;
   const acidentes = k?.acidentesFrota;
@@ -58,7 +66,7 @@ export default function VisaoGerencial() {
           icon={AlertTriangle}
           variant="risk"
           carregando={kpis.isLoading}
-          aoClicar={() => irPara("motoristas", { filtro: "risco" })}
+          aoClicar={() => agora("risco")}
           destino="Ver os motoristas em risco agora"
         />
         <KpiCard
@@ -69,8 +77,8 @@ export default function VisaoGerencial() {
           icon={Gauge}
           variant="warning"
           carregando={kpis.isLoading}
-          aoClicar={() => irPara("motoristas", { filtro: "todos", ordem: "media" })}
-          destino="Ver os motoristas pela fadiga média de 30 dias"
+          aoClicar={() => doPeriodo({ ordem: "media" })}
+          destino={`Ver os turnos (${rotuloPeriodo.toLowerCase()}) pela fadiga média`}
         />
         <KpiCard
           label="Alertas nas últimas 24h" info={DICAS.alertas24h}
@@ -103,7 +111,7 @@ export default function VisaoGerencial() {
               <div className="flex flex-wrap gap-2 mb-3">
                 <button
                   type="button"
-                  onClick={() => irPara("motoristas", { filtro: "risco" })}
+                  onClick={() => agora("risco")}
                   className={cn(
                     "clicavel inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium",
                     k.aoVivo.motoristasEmRisco > 0 ? "bg-risk-high/10 border-risk-high/30 text-risk-high" : "bg-secondary border-border text-muted-foreground",
@@ -120,7 +128,7 @@ export default function VisaoGerencial() {
                 {acidentes && (
                   <button
                     type="button"
-                    onClick={() => irPara("motoristas", { filtro: "ocorrencias" })}
+                    onClick={() => doPeriodo({ filtro: "ocorrencias" })}
                     title="Ver os motoristas com acidente ou ocorrência no período"
                     className={cn(
                       "clicavel inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium",
@@ -215,7 +223,7 @@ export default function VisaoGerencial() {
 
         <ChartCard title="Rotas com maior incidência" info={DICAS.rotas} subtitle="Ordenadas pela fadiga média, com o histórico da PRF nas BRs">
           <Conteudo q={rotas} altura={300}>
-            {(d) => <RiskRoutesList rotas={d} aoSelecionar={(r) => irPara("motoristas", { filtro: "todos", rota: `${r.origemCidade}|${r.destinoCidade}` })} />}
+            {(d) => <RiskRoutesList rotas={d} aoSelecionar={(r) => doPeriodo({ rota: `${r.origemCidade}|${r.destinoCidade}` })} />}
           </Conteudo>
         </ChartCard>
       </section>

@@ -116,8 +116,15 @@ function intervaloDa(janela: Janela, tde: string | null, tate: string | null): I
 }
 
 function SeletorTurnos({ janela, tde, tate }: { janela: Janela; tde: string | null; tate: string | null }) {
-  // Mudar a janela limpa a seleção (o motorista ou o turno podem não existir no novo intervalo).
-  const ir = (valores: Record<string, string | null>) => escreverParametros({ ...valores, turno: null, filtro: null }, { historico: true });
+  // Mudar a janela limpa a seleção (o motorista ou o turno podem não existir no
+  // novo intervalo); rota, ordem e o filtro que existe nos dois modos ficam.
+  const url = useParametros();
+  const ir = (valores: Record<string, string | null>) => {
+    const filtro = url.get("filtro");
+    const destinoAoVivo = !valores.turnos;
+    const manter = filtro && (destinoAoVivo ? FILTROS.some((f) => f.id === filtro) : FILTROS_HISTORICO.some((f) => f.id === filtro));
+    escreverParametros({ ...valores, turno: null, motorista: null, codigo: null, filtro: manter ? filtro : null }, { historico: true });
+  };
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
@@ -195,6 +202,27 @@ function mesmaRota(rotaMotorista: string | null, filtro: string) {
   return a === b;
 }
 
+/** Rota e ordem que vieram de um atalho, com o X para tirar. */
+function FiltrosAplicados({ rota, ordem, nota }: { rota: string | null; ordem: string | null; nota?: string | null }) {
+  if (!rota && !ordem && !nota) return null;
+  const chip = "inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25";
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-3 text-[11px]">
+      {rota && (
+        <button type="button" onClick={() => escreverParametros({ rota: null }, { historico: true })} className={chip} title="Tirar o filtro de rota">
+          Rota {rota.split("|").join(" ↔ ")} <X className="h-3 w-3" />
+        </button>
+      )}
+      {ordem && (
+        <button type="button" onClick={() => escreverParametros({ ordem: null }, { historico: true })} className={chip} title="Voltar à ordem padrão">
+          Ordem: {ordem} <X className="h-3 w-3" />
+        </button>
+      )}
+      {nota && <span className="px-2 py-1 text-muted-foreground">{nota}</span>}
+    </div>
+  );
+}
+
 function MotoristasAoVivo() {
   const { query, rotuloPeriodo } = useFiltros();
   const url = useParametros();
@@ -216,7 +244,6 @@ function MotoristasAoVivo() {
   }, [todos, filtro, rota, ordemMedia]);
   const ativos = todos.filter((m) => m.ativo);
   const emRisco = ativos.filter((m) => m.risco === "high" || m.risco === "critical").length;
-  const rotuloRota = rota?.split("|").join(" ↔ ");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
@@ -252,21 +279,7 @@ function MotoristasAoVivo() {
               );
             })}
           </div>
-          {(rota || ordemMedia || filtro === "ocorrencias") && (
-            <div className="flex flex-wrap gap-1.5 mb-3 text-[11px]">
-              {rota && (
-                <button type="button" onClick={() => escreverParametros({ rota: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
-                  Rota {rotuloRota} <X className="h-3 w-3" />
-                </button>
-              )}
-              {ordemMedia && (
-                <button type="button" onClick={() => escreverParametros({ ordem: null }, { historico: true })} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/25">
-                  Ordem: fadiga média 30 dias <X className="h-3 w-3" />
-                </button>
-              )}
-              {filtro === "ocorrencias" && <span className="px-2 py-1 text-muted-foreground">ocorrências {rotuloPeriodo.toLowerCase()}</span>}
-            </div>
-          )}
+          <FiltrosAplicados rota={rota} ordem={ordemMedia ? "fadiga média 30 dias" : null} nota={filtro === "ocorrencias" ? `ocorrências ${rotuloPeriodo.toLowerCase()}` : null} />
           <div className="space-y-2 overflow-auto pr-1 flex-1 min-h-0">
             <Conteudo q={lista} altura={400}>
               {() =>
@@ -696,9 +709,15 @@ function MotoristasHistorico({ intervalo }: { intervalo: Intervalo }) {
   const url = useParametros();
   const q = useQueryIntervalo(intervalo);
   const filtro = (FILTROS_HISTORICO.find((f) => f.id === url.get("filtro"))?.id ?? "todos") as FiltroHistorico;
+  const ordemMedia = url.get("ordem") === "media";
+  const rota = url.get("rota");
   const lista = useQuery({ queryKey: ["motoristas-historico", q], queryFn: () => api.get<MotoristaHistorico[]>("/motoristas/historico", q) });
-  const todos = lista.data ?? [];
-  const visiveis = todos.filter(FILTROS_HISTORICO.find((f) => f.id === filtro)!.teste);
+  // A rota (atalho da visão gerencial) vale para a lista e para as contagens dos filtros.
+  const todos = useMemo(() => (lista.data ?? []).filter((m) => !rota || m.rotas.some((r) => mesmaRota(r, rota))), [lista.data, rota]);
+  const visiveis = useMemo(() => {
+    const base = todos.filter(FILTROS_HISTORICO.find((f) => f.id === filtro)!.teste);
+    return ordemMedia ? [...base].sort((a, b) => (b.scoreMedio ?? -1) - (a.scoreMedio ?? -1)) : base;
+  }, [todos, filtro, ordemMedia]);
   const selecionado = url.get("motorista");
   const selecionar = (id: string | null) => escreverParametros({ motorista: id, turno: null, codigo: null }, { historico: true });
   const horas = todos.reduce((a, m) => a + (m.horas ?? 0), 0);
@@ -732,6 +751,7 @@ function MotoristasHistorico({ intervalo }: { intervalo: Intervalo }) {
               </button>
             ))}
           </div>
+          <FiltrosAplicados rota={rota} ordem={ordemMedia ? "fadiga média no intervalo" : null} />
           <div className="space-y-2 overflow-auto pr-1 flex-1 min-h-0">
             <Conteudo q={lista} altura={400}>
               {() =>

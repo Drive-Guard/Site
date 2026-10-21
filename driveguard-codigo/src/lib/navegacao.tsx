@@ -9,8 +9,11 @@
  *   - o link copiado abre a mesma visão (o e-mail de relatório usa isso).
  *
  * Parâmetros por aba:
- *   motoristas    filtro=ativos|risco|alertas|ocorrencias|todos, ordem=media,
- *                 motorista=<id>, codigo=DRV-1000, rota=Cidade|Cidade
+ *   motoristas    turnos=agora|hoje|ontem|7d|30d|intervalo (+ tde, tate),
+ *                 filtro=ativos|risco|alertas|ocorrencias|todos, ordem=media,
+ *                 motorista=<id>, turno=<id>, codigo=DRV-1000, rota=Cidade|Cidade
+ *                 (número "agora" abre turnos=agora; número do período abre a
+ *                 janela do período: ver janelaDoPeriodo em lib/filtros.tsx)
  *   monitoramento horas=6..720, gravidade=graves
  *   relatorios    faixa=madrugada|manha|tarde|noite, risco=critical|high|...
  */

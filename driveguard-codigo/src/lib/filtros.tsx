@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Query } from "./api";
+import { diaIso } from "./formato";
 import { escreverParametros, useParametros } from "./navegacao";
 
 export type Periodo = "7d" | "30d" | "90d" | "ano" | "personalizado";
@@ -80,6 +81,19 @@ export function FiltrosProvider({ children }: { children: ReactNode }) {
   }, [chave]);
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
+}
+
+/**
+ * O período global como janela de turnos da aba Motoristas (?turnos=), para
+ * um número "do período" abrir a lista do mesmo período, e não a de agora.
+ */
+export function janelaDoPeriodo(f: Filtros): { turnos: string; tde: string | null; tate: string | null } {
+  if (f.periodo === "7d" || f.periodo === "30d") return { turnos: f.periodo, tde: null, tate: null };
+  const hoje = diaIso(new Date());
+  if (f.periodo === "personalizado" && f.de) return { turnos: "intervalo", tde: f.de, tate: f.ate ?? f.de };
+  if (f.periodo === "90d") return { turnos: "intervalo", tde: diaIso(new Date(Date.now() - 89 * 86_400_000)), tate: hoje };
+  if (f.periodo === "ano") return { turnos: "intervalo", tde: `${hoje.slice(0, 4)}-01-01`, tate: hoje };
+  return { turnos: "30d", tde: null, tate: null };
 }
 
 export function useFiltros() {
