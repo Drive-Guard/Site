@@ -176,7 +176,10 @@ export function FormAcao({
   pendente,
   aoEnviar,
   aoCancelar,
+  compacto = false,
 }: {
+  /** Botões sem a linha de explicação (ela aparece ao escolher a ação): para colunas estreitas. */
+  compacto?: boolean;
   grupos?: Grupo[];
   sugerida?: string | null;
   /** Outros alertas abertos do motorista: oferece aplicar a todos. */
@@ -213,12 +216,16 @@ export function FormAcao({
                       setTipo(t);
                       setDetalhe(null);
                     }}
-                    className="relative flex items-start gap-2 rounded-lg border border-border px-2.5 py-2 text-left transition hover:border-primary/40 hover:bg-secondary/50"
+                    title={compacto ? a.ajuda : undefined}
+                    className={cn(
+                      "relative flex gap-2 rounded-lg border border-border px-2.5 text-left transition hover:border-primary/40 hover:bg-secondary/50",
+                      compacto ? "items-center py-1.5" : "items-start py-2",
+                    )}
                   >
-                    <a.icone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <a.icone className={cn("h-4 w-4 shrink-0 text-muted-foreground", !compacto && "mt-0.5")} />
                     <span className="min-w-0">
                       <span className="block text-xs font-medium leading-tight">{a.rotulo}</span>
-                      <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">{a.ajuda}</span>
+                      {!compacto && <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">{a.ajuda}</span>}
                     </span>
                     {sugerida === t && (
                       <span className="absolute -top-1.5 right-1.5 inline-flex items-center gap-0.5 rounded-full bg-primary px-1.5 text-[9px] font-semibold text-primary-foreground">

@@ -55,6 +55,7 @@ import { Filters } from "./Filters";
 import { KpiCard } from "./KpiCard";
 import { DICAS } from "@/lib/dicas";
 import { Dica } from "@/components/comum/Dica";
+import { Paginacao, usePaginacao } from "@/components/comum/Paginacao";
 import { ACOES, FormAcao, HistoricoRespostas, type EnvioAcao } from "@/components/tecnica/AcoesCentral";
 import { corpoResposta, espera, minutosDesde, sugestao } from "@/components/tecnica/RespostaAlerta";
 
@@ -248,9 +249,10 @@ function MotoristasAoVivo() {
   const emRisco = ativos.filter((m) => m.risco === "high" || m.risco === "critical").length;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
-      <aside className="lg:col-span-3">
-        <div className="glass-card rounded-xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
+    // items-start: cada lado tem a altura do que mostra (sem esticar cards até a altura da lista).
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 lg:items-start">
+      <aside className="lg:col-span-3 lg:sticky lg:top-20">
+        <div className="glass-card rounded-xl p-4 flex flex-col max-h-[70vh] lg:max-h-[calc(100vh-7rem)]">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-base font-semibold flex items-center gap-2">
@@ -365,6 +367,10 @@ function PainelFrota({ lista, aoSelecionar }: { lista: MotoristaAoVivo[]; aoSele
   const horas = lista.length ? lista.reduce((a, d) => a + (d.horasTurno ?? 0), 0) / lista.length : null;
   const alertas = lista.reduce((a, d) => a + d.alertasHoje, 0);
   const criticos = lista.filter((d) => d.risco === "critical" || d.risco === "high");
+  const atencao = usePaginacao(
+    [...lista].filter((d) => d.risco === "critical" || d.risco === "high" || (d.horasTurno ?? 0) >= 6).sort((a, b) => b.score - a.score),
+    6,
+  );
   return (
     <>
       <div className="glass-card rounded-xl p-4">
@@ -379,14 +385,14 @@ function PainelFrota({ lista, aoSelecionar }: { lista: MotoristaAoVivo[]; aoSele
         <KpiCard label="Em risco" info={DICAS.emRiscoAgora} value={criticos.length} hint={CRITERIO_EM_RISCO} icon={Zap} variant="risk" />
       </div>
       <ChartCard title="Quem precisa de atenção" subtitle="Motoristas com score alto ou turno longo">
-        {criticos.length === 0 && lista.every((d) => (d.horasTurno ?? 0) < 6) ? (
-          <Vazio icone={<ShieldCheck className="h-5 w-5 text-risk-low" />}>Ninguém em risco agora.</Vazio>
+        {atencao.quantidade === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <ShieldCheck className="h-4 w-4 text-risk-low" /> Ninguém em risco nem com turno longo agora.
+          </p>
         ) : (
+          <>
           <ul className="grid md:grid-cols-2 gap-2">
-            {[...lista]
-              .filter((d) => d.risco === "critical" || d.risco === "high" || (d.horasTurno ?? 0) >= 6)
-              .sort((a, b) => b.score - a.score)
-              .map((d) => (
+            {atencao.visiveis.map((d) => (
                 <li
                   key={d.motoristaId}
                   onClick={() => aoSelecionar(d.motoristaId)}
@@ -403,6 +409,8 @@ function PainelFrota({ lista, aoSelecionar }: { lista: MotoristaAoVivo[]; aoSele
                 </li>
               ))}
           </ul>
+          <Paginacao p={atencao} />
+          </>
         )}
       </ChartCard>
     </>
@@ -464,7 +472,7 @@ function GraficoAgora({ id }: { id: string }) {
       <Conteudo q={q} altura={220}>
         {(r) =>
           r.leituras.length === 0 ? (
-            <Vazio>Sem leitura nos últimos {r.minutos} minutos.</Vazio>
+            <p className="text-sm text-muted-foreground">Sem leitura nos últimos {r.minutos} minutos.</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dados} margin={{ top: 18, right: 16, left: 0, bottom: 0 }}>
@@ -514,11 +522,13 @@ function CabecalhoMotorista({ d, rotulo, aoLimpar }: { d: MotoristaDetalhe | und
 }
 
 function ListaOcorrencias({ ocorrencias }: { ocorrencias: MotoristaDetalhe["ocorrencias"] }) {
+  const p = usePaginacao(ocorrencias, 3);
   return ocorrencias.length === 0 ? (
-    <Vazio>Nenhuma ocorrência registrada.</Vazio>
+    <p className="text-sm text-muted-foreground">Nenhuma ocorrência registrada.</p>
   ) : (
+    <>
     <ul className="divide-y divide-border">
-      {ocorrencias.map((o) => (
+      {p.visiveis.map((o) => (
         <li key={o.id} className="py-3 flex gap-3">
           <AlertTriangle className={cn("h-4 w-4 mt-0.5 shrink-0", o.relacionadoSonolencia ? "text-risk-high" : "text-muted-foreground")} />
           <div className="min-w-0">
@@ -531,11 +541,13 @@ function ListaOcorrencias({ ocorrencias }: { ocorrencias: MotoristaDetalhe["ocor
                 .filter(Boolean)
                 .join(" • ")}
             </p>
-            {o.descricao && <p className="text-xs text-muted-foreground mt-1 leading-snug">{o.descricao}</p>}
+            {o.descricao && <p className="text-xs text-muted-foreground mt-1 leading-snug line-clamp-2" title={o.descricao}>{o.descricao}</p>}
           </div>
         </li>
       ))}
     </ul>
+    <Paginacao p={p} />
+    </>
   );
 }
 
@@ -545,7 +557,7 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
   const insights = useQuery({ queryKey: ["insights-motorista", id], queryFn: () => api.get<InsightMotorista[]>(`/motoristas/${id}/insights`), refetchInterval: 60_000 });
   const d = detalhe.data;
   // Dirigindo agora (leitura nos últimos 30 min): o gráfico leitura a leitura.
-  const aoVivo = !!d?.agora?.ultimaLeituraEm && Date.now() - new Date(d.agora.ultimaLeituraEm).getTime() < 30 * 60_000;
+  const aoVivo = !!d?.agora?.ultimaLeituraEm && Date.now() - new Date(d.agora.ultimaLeituraEm).getTime() < 15 * 60_000;
 
   return (
     <>
@@ -581,7 +593,9 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
 
       {aoVivo && <GraficoAgora id={id} />}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      {/* Duas colunas que crescem cada uma com o seu conteúdo: nenhum card estica para igualar o vizinho. */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+        <div className="xl:col-span-2 flex flex-col gap-6 min-w-0">
         <ChartCard
           title="Evolução da fadiga no turno" info={DICAS.curvaTurno}
           subtitle={
@@ -589,14 +603,18 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
               ? `Turno iniciado ${dataHora(curva.data.turno.iniciadoEm)}${curva.data.turno.origem ? ` • ${curva.data.turno.origem} → ${curva.data.turno.destino}` : ""} • tracejado: média da frota`
               : "Último turno"
           }
-          className="xl:col-span-2"
         >
           <Conteudo q={curva} altura={300}>
             {(c) => (!c.turno ? <Vazio>Sem turno com leituras.</Vazio> : <GraficoCurva curva={c} />)}
           </Conteudo>
         </ChartCard>
 
-        <div className="flex flex-col gap-4">
+        <ChartCard title="Ocorrências do motorista" info={DICAS.ocorrenciasMotorista} subtitle="Acidentes e ocorrências da própria frota registrados para este motorista">
+          {d ? <ListaOcorrencias ocorrencias={d.ocorrencias} /> : null}
+        </ChartCard>
+        </div>
+
+        <div className="flex flex-col gap-6 min-w-0">
           <ChartCard title="Insights do motorista" info={DICAS.insightsMotorista} subtitle="Regras sobre o estado atual e os últimos 30 dias">
             <Conteudo q={insights} altura={200}>
               {(lista) => (
@@ -626,10 +644,6 @@ function PainelMotorista({ id, aoLimpar }: { id: string; aoLimpar: () => void })
           {d && <AcoesRapidas motorista={d} />}
         </div>
       </div>
-
-      <ChartCard title="Ocorrências do motorista" info={DICAS.ocorrenciasMotorista} subtitle="Acidentes e ocorrências da própria frota registrados para este motorista">
-        {d ? <ListaOcorrencias ocorrencias={d.ocorrencias} /> : null}
-      </ChartCard>
     </>
   );
 }
@@ -681,7 +695,7 @@ function AcoesRapidas({ motorista }: { motorista: MotoristaDetalhe }) {
     onError: (e) => toast.error(mensagemDeErro(e)),
   });
 
-  const recentes = (motorista.acoesRecentes ?? []).map((a) => ({
+  const recentes = (motorista.acoesRecentes ?? []).slice(0, 4).map((a) => ({
     ...a,
     contexto: a.alertaRotulo ? `resposta ao alerta de ${a.alertaRotulo.toLowerCase()}` : null,
   }));
@@ -703,6 +717,7 @@ function AcoesRapidas({ motorista }: { motorista: MotoristaDetalhe }) {
       )}
       <FormAcao
         key={rodada}
+        compacto
         nome={motorista.nome}
         grupos={alerta ? undefined : ["falar", "pedir", "depois"]}
         sugerida={alerta ? sugestao(alerta.gravidade) : null}
@@ -827,9 +842,10 @@ function MotoristasHistorico({ intervalo }: { intervalo: Intervalo }) {
   const horas = todos.reduce((a, m) => a + (m.horas ?? 0), 0);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
-      <aside className="lg:col-span-3">
-        <div className="glass-card rounded-xl p-4 flex flex-col min-h-[600px] max-h-[calc(100vh-220px)]">
+    // items-start: cada lado tem a altura do que mostra (sem esticar cards até a altura da lista).
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 lg:items-start">
+      <aside className="lg:col-span-3 lg:sticky lg:top-20">
+        <div className="glass-card rounded-xl p-4 flex flex-col max-h-[70vh] lg:max-h-[calc(100vh-7rem)]">
           <div className="mb-3">
             <h3 className="text-base font-semibold flex items-center gap-2">
               <CalendarRange className="h-4 w-4 text-primary" /> {intervalo.rotulo}
