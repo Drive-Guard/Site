@@ -61,7 +61,7 @@ export const DICAS = {
   curvaTurno: "Score do motorista ao longo do turno atual (ou do último). O tracejado é a média da frota no mesmo período.",
   insightsMotorista: "Regras sobre o estado atual e os últimos 30 dias: fadiga acima do limite, turno longo, sinais de microssono, reincidência e acidentes recentes.",
   acoesRapidas:
-    "A resposta da central ao alerta que já tocou na cabine: a pausa e o contato ficam registrados no alerta mais recente e contam como “atendido”.",
+    "O que a central fez com o motorista, com as mesmas opções da resposta a um alerta. Se há um alerta aguardando (das últimas 2 h), a ação responde a ele: falar com ele, mandar parar e descansar, outro motorista assumir ou parar de dirigir hoje contam como alerta atendido. Treinamento e advertência ficam só no histórico do motorista. Dá para desfazer em até 15 minutos.",
   ocorrenciasMotorista: "Acidentes e ocorrências da própria frota registrados para este motorista, com o contexto do momento.",
   janelaTurnos:
     "“Agora” é a frota em tempo real. As outras opções mostram os turnos que começaram no intervalo escolhido, já encerrados ou não, com o pico e a média de fadiga de cada um.",

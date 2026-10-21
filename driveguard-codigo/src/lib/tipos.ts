@@ -332,6 +332,20 @@ export interface MotoristaDetalhe {
     relacionadoSonolencia: boolean;
     descricao: string | null;
   }[];
+  /** Últimas ações da central com o motorista (7 dias). */
+  acoesRecentes: {
+    id: string;
+    tipo: string;
+    detalhe: string | null;
+    observacao: string | null;
+    em: string;
+    por: string | null;
+    alertaId: string | null;
+    alertaRotulo: string | null;
+    podeDesfazer: boolean;
+  }[];
+  /** Alerta aberto (2 h) que a próxima ação da central responde. */
+  alertaAberto: { id: string; rotulo: string; gravidade: string; disparadoEm: string; score: number | null } | null;
 }
 
 export interface CurvaTurno {

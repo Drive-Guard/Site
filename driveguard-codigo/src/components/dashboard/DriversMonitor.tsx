@@ -46,7 +46,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { api, mensagemDeErro, type Query } from "@/lib/api";
 import { useFiltros } from "@/lib/filtros";
 import { escreverParametros, useParametros } from "@/lib/navegacao";
-import { dataHora, diaIso, num, relativo } from "@/lib/formato";
+import { dataHora, diaIso, hora, num, relativo } from "@/lib/formato";
 import { ANEL_RISCO, CHIP_RISCO, COR, CRITERIO_EM_RISCO, ESTILO_TOOLTIP, PONTO_RISCO, ROTULO_RISCO } from "@/lib/risco";
 import type { CurvaTurno, InsightMotorista, MotoristaAoVivo, MotoristaDetalhe, MotoristaHistorico, TurnoResumo } from "@/lib/tipos";
 import { cn } from "@/lib/utils";
@@ -55,6 +55,8 @@ import { Filters } from "./Filters";
 import { KpiCard } from "./KpiCard";
 import { DICAS } from "@/lib/dicas";
 import { Dica } from "@/components/comum/Dica";
+import { ACOES, FormAcao, HistoricoRespostas, type EnvioAcao } from "@/components/tecnica/AcoesCentral";
+import { corpoResposta, espera, minutosDesde, sugestao } from "@/components/tecnica/RespostaAlerta";
 
 const ICONES: Record<string, typeof AlertTriangle> = {
   alerta: AlertTriangle,
@@ -575,51 +577,90 @@ const ROTULO_GRAVIDADE_OCORRENCIA: Record<string, string> = {
   com_fatais: "Com vítimas fatais",
 };
 
+/**
+ * Ações da central com o motorista: o mesmo formulário da resposta a um
+ * alerta (AcoesCentral.tsx). Com um alerta aberto, a ação responde a ele;
+ * sem alerta, fica no histórico do motorista.
+ */
 function AcoesRapidas({ motorista }: { motorista: MotoristaDetalhe }) {
   const cliente = useQueryClient();
   const [ocorrencia, setOcorrencia] = useState(false);
-  const acao = useMutation({
-    mutationFn: (tipo: string) => api.post(`/motoristas/${motorista.motoristaId}/acoes`, { tipo, descricao: tipo === "pausa_obrigatoria" ? "Pausa solicitada pela central" : "Contato telefônico com o motorista" }),
-    onSuccess: (_, tipo) => {
-      toast.success(tipo === "pausa_obrigatoria" ? `Pausa registrada para ${motorista.nome}` : "Contato registrado");
-      cliente.invalidateQueries({ queryKey: ["tempo-real"] });
-      cliente.invalidateQueries({ queryKey: ["motorista", motorista.motoristaId] });
+  // Muda a cada registro, para o formulário voltar ao começo.
+  const [rodada, setRodada] = useState(0);
+  const alerta = motorista.alertaAberto ?? null;
+  const primeiro = motorista.nome.split(" ")[0];
+
+  const atualizar = () => {
+    for (const k of [["tempo-real"], ["kpis"], ["motorista", motorista.motoristaId], ["roi"]]) cliente.invalidateQueries({ queryKey: k });
+  };
+  const registrar = useMutation({
+    mutationFn: (e: EnvioAcao) =>
+      alerta
+        ? api.post(`/alertas/${alerta.id}/respostas`, corpoResposta(e))
+        : api.post(`/motoristas/${motorista.motoristaId}/acoes`, {
+            tipo: e.tipo,
+            ...(e.detalhe ? { detalhe: e.detalhe } : {}),
+            ...(e.observacao ? { observacao: e.observacao } : {}),
+          }),
+    onSuccess: (_, e) => {
+      toast.success(`${ACOES[e.tipo].feito}: registrado para ${motorista.nome}`);
+      atualizar();
+      setRodada((n) => n + 1);
+    },
+    onError: (e) => toast.error(mensagemDeErro(e)),
+  });
+  const desfazer = useMutation({
+    mutationFn: (acaoId: string) => api.del(`/motoristas/${motorista.motoristaId}/acoes/${acaoId}`),
+    onSuccess: () => {
+      toast.success("Ação desfeita");
+      atualizar();
     },
     onError: (e) => toast.error(mensagemDeErro(e)),
   });
 
-  const botoes = [
-    { tipo: "pausa_obrigatoria", rotulo: "Solicitar pausa", icone: CoffeeIcon, cls: "border-risk-medium/50 bg-risk-medium/15 text-risk-medium hover:bg-risk-medium/25" },
-    { tipo: "contato_telefonico", rotulo: "Registrar contato", icone: Phone, cls: "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20" },
-  ];
+  const recentes = (motorista.acoesRecentes ?? []).map((a) => ({
+    ...a,
+    contexto: a.alertaRotulo ? `resposta ao alerta de ${a.alertaRotulo.toLowerCase()}` : null,
+  }));
 
   return (
-    <ChartCard title="Ações rápidas" info={DICAS.acoesRapidas} subtitle="O alerta sonoro já tocou na cabine; aqui fica a resposta da central">
-      <div className="grid grid-cols-1 gap-2">
-        {botoes.map((b) => (
-          <button
-            key={b.tipo}
-            disabled={acao.isPending}
-            onClick={() => acao.mutate(b.tipo)}
-            className={cn("group w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-3.5 text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-60", b.cls)}
-          >
-            <span className="flex items-center gap-2.5">
-              {acao.isPending && acao.variables === b.tipo ? <Loader2 className="h-4 w-4 animate-spin" /> : <b.icone className="h-4 w-4" />}
-              {b.rotulo}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider opacity-60 group-hover:opacity-100">{motorista.codigo}</span>
-          </button>
-        ))}
-        <button
-          onClick={() => setOcorrencia(true)}
-          className="group w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-3.5 text-sm font-medium transition-all border-border bg-secondary/40 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-        >
-          <span className="flex items-center gap-2.5">
-            <FileText className="h-4 w-4" /> Registrar ocorrência
+    <ChartCard
+      title="Ações da central"
+      info={DICAS.acoesRapidas}
+      subtitle={alerta ? "Responda ao alerta que está aguardando" : `Registre o que a central fez com ${primeiro}`}
+    >
+      {alerta && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-risk-high/30 bg-risk-high/5 px-3 py-2 text-xs">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-risk-high" />
+          <span>
+            <b>{alerta.rotulo}</b> às {hora(alerta.disparadoEm)} ({espera(minutosDesde(alerta.disparadoEm))}) • score {num(alerta.score, 0)}
+            <span className="block text-muted-foreground">aguardando resposta da central</span>
           </span>
-          <span className="text-[10px] uppercase tracking-wider opacity-60 group-hover:opacity-100">{motorista.codigo}</span>
-        </button>
-      </div>
+        </div>
+      )}
+      <FormAcao
+        key={rodada}
+        nome={motorista.nome}
+        grupos={alerta ? undefined : ["falar", "pedir", "depois"]}
+        sugerida={alerta ? sugestao(alerta.gravidade) : null}
+        pendente={registrar.isPending}
+        aoEnviar={(e) => registrar.mutate(e)}
+      />
+      {recentes.length > 0 && (
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Últimas ações (7 dias)</p>
+          <HistoricoRespostas itens={recentes} desfazendo={desfazer.isPending} aoDesfazer={(id) => desfazer.mutate(id)} />
+        </div>
+      )}
+      <button
+        onClick={() => setOcorrencia(true)}
+        className="mt-4 w-full flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-xs font-medium text-muted-foreground transition hover:bg-secondary/70 hover:text-foreground"
+      >
+        <span className="flex items-center gap-2">
+          <FileText className="h-4 w-4" /> Registrar acidente ou quase-acidente
+        </span>
+        <span className="text-[10px] uppercase tracking-wider opacity-60">{motorista.codigo}</span>
+      </button>
       <DialogOcorrencia aberto={ocorrencia} aoFechar={() => setOcorrencia(false)} motorista={motorista} />
     </ChartCard>
   );
